@@ -1,5 +1,7 @@
 # Stained Motion
 
+**[Live Demo](https://pchadik.github.io/stainedmotion/)**
+
 An animated stained glass screensaver that generates procedural geometric patterns with harmonic color schemes.
 
 ## Implementations
