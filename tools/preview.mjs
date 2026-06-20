@@ -20,14 +20,22 @@ const html = readFileSync(join(ROOT, 'build', mode, 'index.html'), 'utf8');
 const js = html.split('<script>')[1].split('</script>')[0];
 
 // ---- capture draw calls for one frame ----
-let records = [], bg = '#000', cur = [];
+let records = [], bg = '#000', cur = [], pend = null;
 const state = { fillStyle: '#000', strokeStyle: '#000', lineWidth: 1 };
 const ctx = new Proxy({}, {
   get(_, p) {
-    if (p === 'beginPath') return () => { cur = []; };
+    if (p === 'beginPath') return () => { cur = []; pend = null; };
     if (p === 'moveTo' || p === 'lineTo') return (x, y) => cur.push([x * S, y * S]);
+    if (p === 'arc') return (x, y, r) => { pend = { cx: x * S, cy: y * S, r: r * S }; };
     if (p === 'fillRect') return () => { bg = state.fillStyle; };
-    if (p === 'fill') return () => records.push({ t: 'f', pts: cur.slice(), s: state.fillStyle });
+    if (p === 'fill') return () => {
+      if (cur.length) records.push({ t: 'f', pts: cur.slice(), s: state.fillStyle });
+      else if (pend) {
+        const pts = [];
+        for (let k = 0; k < 24; k++) { const a = k / 24 * Math.PI * 2; pts.push([pend.cx + pend.r * Math.cos(a), pend.cy + pend.r * Math.sin(a)]); }
+        records.push({ t: 'f', pts, s: state.fillStyle });
+      }
+    };
     if (p === 'stroke') return () => records.push({ t: 's', pts: cur.slice(), s: state.strokeStyle });
     return () => {};
   },
@@ -55,17 +63,24 @@ function hslToRgb(h, s, l) {
   return [Math.round(f(0) * 255), Math.round(f(8) * 255), Math.round(f(4) * 255)];
 }
 function parse(c) {
-  if (c[0] === '#') { const n = parseInt(c.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
-  const m = c.match(/hsl\(([-\d.]+),\s*([-\d.]+)%,\s*([-\d.]+)%\)/);
-  if (m) return hslToRgb((parseFloat(m[1]) % 360 + 360) % 360, +m[2], +m[3]);
-  return [128, 128, 128];
+  if (c[0] === '#') { const n = parseInt(c.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255, 1]; }
+  let m = c.match(/hsl\(([-\d.]+),\s*([-\d.]+)%,\s*([-\d.]+)%\)/);
+  if (m) return [...hslToRgb((parseFloat(m[1]) % 360 + 360) % 360, +m[2], +m[3]), 1];
+  m = c.match(/rgba?\(([-\d.]+),\s*([-\d.]+),\s*([-\d.]+)(?:,\s*([-\d.]+))?\)/);
+  if (m) return [+m[1], +m[2], +m[3], m[4] !== undefined ? +m[4] : 1];
+  return [128, 128, 128, 1];
 }
 
 // ---- rasterize ----
 const buf = Buffer.alloc(PW * PH * 3);
 const bgc = parse(bg);
 for (let i = 0; i < PW * PH; i++) { buf[i * 3] = bgc[0]; buf[i * 3 + 1] = bgc[1]; buf[i * 3 + 2] = bgc[2]; }
-const px = (x, y, c) => { if (x < 0 || y < 0 || x >= PW || y >= PH) return; const o = (y * PW + x) * 3; buf[o] = c[0]; buf[o + 1] = c[1]; buf[o + 2] = c[2]; };
+const px = (x, y, c) => {
+  if (x < 0 || y < 0 || x >= PW || y >= PH) return;
+  const o = (y * PW + x) * 3, a = c[3] === undefined ? 1 : c[3];
+  if (a >= 1) { buf[o] = c[0]; buf[o + 1] = c[1]; buf[o + 2] = c[2]; }
+  else { buf[o] = buf[o] * (1 - a) + c[0] * a; buf[o + 1] = buf[o + 1] * (1 - a) + c[1] * a; buf[o + 2] = buf[o + 2] * (1 - a) + c[2] * a; }
+};
 function fillPoly(pts, c) {
   for (const p of pts) if (!isFinite(p[0]) || !isFinite(p[1])) return;
   let minY = Infinity, maxY = -Infinity;

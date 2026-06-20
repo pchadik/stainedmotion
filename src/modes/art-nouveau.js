@@ -10,7 +10,10 @@
 // ribbons to anchor the composition and fill open space. Their rings rotate
 // (alternating direction) with motion axis r.
 //
-// Motes (axis p) arrive in a later stage.
+// Motes: small gold glints that advect along the same flow field as the
+// ribbons, so they drift through the curves. Their count is fixed but their
+// opacity and speed scale with motion axis p (a faint shimmer at low p, a
+// brighter drift at high p).
 (function (App) {
   App.createArtNouveau = function (deps) {
     var color = deps.color;
@@ -21,9 +24,13 @@
 
     var ribbons = [];
     var roundels = [];
+    var motes = [];
+    var curP = 0; // last sampled particle axis, used at render time
     var W = 1, H = 1;
     var fieldPhase = 0;
-    var SMOOTH_TAU = 280; // ms; ribbon inertia time constant
+    var SMOOTH_TAU = 470; // ms; ribbon inertia time constant (gentle ~0.5s glide)
+    var MOTE_COUNT = 90;
+    var MOTE_LIFE = 4200; // ms
 
     // Fixed per-run field constants so every run flows differently.
     var P1 = Math.random() * Math.PI * 2;
@@ -130,6 +137,22 @@
       App.strokePolygon(ctx, circlePoly(rd.cx, rd.cy, rd.R * 0.97), outline, outlineWidth * 1.4);
     }
 
+    // ---- motes ----
+    function spawnMote(w, h, ageFrac) {
+      return {
+        x: Math.random() * w,
+        y: Math.random() * h,
+        age: ageFrac * MOTE_LIFE,
+        life: MOTE_LIFE * (0.7 + Math.random() * 0.6),
+        r: 1.3 + Math.random() * 1.8
+      };
+    }
+
+    function initMotes(w, h) {
+      motes = [];
+      for (var i = 0; i < MOTE_COUNT; i++) motes.push(spawnMote(w, h, Math.random()));
+    }
+
     // ---- ribbons ----
     function init(w, h) {
       W = w; H = h;
@@ -150,6 +173,7 @@
         ribbons.push(rb);
       }
       roundels = buildRoundels(w, h);
+      initMotes(w, h);
     }
 
     var scratch = [];
@@ -200,6 +224,20 @@
           bands[bi].phase += (dt / 1000) * bands[bi].rate * rSpin;
         }
       }
+
+      // Advect motes along the field; speed scales with axis p.
+      curP = m.p;
+      var spd = (10 + 50 * m.p) * dt / 1000;
+      for (var mi = 0; mi < motes.length; mi++) {
+        var mo = motes[mi];
+        var a = fieldAngle(mo.x, mo.y);
+        mo.x += Math.cos(a) * spd;
+        mo.y += Math.sin(a) * spd;
+        mo.age += dt;
+        if (mo.age > mo.life || mo.x < -10 || mo.x > w + 10 || mo.y < -10 || mo.y > h + 10) {
+          motes[mi] = spawnMote(w, h, 0);
+        }
+      }
     }
 
     function render(ctx, w, h, env) {
@@ -216,6 +254,19 @@
         var col = color.getCellColor(mid.x, mid.y, w, h);
         App.fillPolygon(ctx, poly, color.colorToHsl(col));
         App.strokePolygon(ctx, poly, outline, outlineWidth);
+      }
+
+      // Motes on top: gold glints, fading in/out over their life, overall
+      // opacity scaled by axis p.
+      for (var mi = 0; mi < motes.length; mi++) {
+        var mo = motes[mi];
+        var env = Math.sin(Math.PI * mo.age / mo.life); // 0 at birth/death, 1 mid-life
+        var alpha = 0.65 * curP * (env > 0 ? env : 0);
+        if (alpha < 0.012) continue;
+        ctx.fillStyle = 'rgba(228,208,150,' + alpha.toFixed(3) + ')';
+        ctx.beginPath();
+        ctx.arc(mo.x, mo.y, mo.r, 0, Math.PI * 2);
+        ctx.fill();
       }
     }
 
