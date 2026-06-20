@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Art Nouveau</title>
+  <title>Art Nouveau (v1)</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0a0a; }
@@ -314,14 +314,13 @@
   };
 })(window.App = window.App || {});
 
-/* ===== src/palettes/art-nouveau.js ===== */
-// Art Nouveau / Mucha palette: muted, pastel, lower saturation and higher
-// lightness than stained glass, for the soft drapery-and-gold feel. The hue
-// drift still cycles slowly; biasing toward Mucha's sage/rose/gold/teal band is
-// a later tuning knob.
+/* ===== src/palettes/art-nouveau-v1.js ===== */
+// Art Nouveau v1 palette — FROZEN SNAPSHOT (copy of the Art Nouveau palette
+// at this point). Kept stable for the saved v1 variant; tweak art-nouveau.js's
+// palette for the working version.
 (function (App) {
   App.palettes = App.palettes || {};
-  App.palettes.artNouveau = {
+  App.palettes.artNouveauV1 = {
     harmonies: {
       analogous: [0, 25, -25, 40, -40],
       triadic: [0, 120, 240],
@@ -343,20 +342,14 @@
   };
 })(window.App = window.App || {});
 
-/* ===== src/modes/art-nouveau.js ===== */
-// Art Nouveau mode. Layers, back to front:
-//   mosaic field  - low-contrast tessellation covering the whole canvas
-//   sunburst rays - gold rays radiating from each roundel (halo) center
-//   roundels      - concentric polar mosaics, rings rotate with axis r
-//   beads         - pearl strings around roundels and along free arcs
-//   spirals       - whiplash filigree scrolls tucked into the gaps
-//   vines         - tendrils growing from the roundel rims, undulate with
-//                   axis u; they stop at any roundel they reach (no overlap)
-//   motes         - gold glints advecting along the field, axis p
-// A global time-scale slows the whole piece uniformly (including the motion
-// axes' own variation).
+/* ===== src/modes/art-nouveau-v1.js ===== */
+// Art Nouveau v1 — FROZEN SNAPSHOT. A preserved copy of the Art Nouveau mode
+// at this point in its evolution, kept stable while the working `art-nouveau`
+// mode continues to change. Do not edit for new features; tweak art-nouveau.js
+// instead. Layers, back to front: mosaic field, sunburst rays, roundels,
+// beads, spirals, vines (axis u), motes (axis p); global time-scale slows all.
 (function (App) {
-  App.createArtNouveau = function (deps) {
+  App.createArtNouveauV1 = function (deps) {
     var color = deps.color;
     var motion = deps.motion;
     var palette = deps.palette || {};
@@ -811,7 +804,7 @@
   };
 })(window.App = window.App || {});
 
-    App.start('art-nouveau');
+    App.start('art-nouveau-v1');
   </script>
 </body>
 </html>

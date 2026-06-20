@@ -36,6 +36,15 @@ const MODES = {
     sources: ['src/palettes/art-nouveau.js', 'src/modes/art-nouveau.js'],
     bootstrap: "App.start('art-nouveau');",
     rootFiles: ['art-nouveau.html']
+  },
+  // Frozen snapshot — built from the *-v1 sources, independent of art-nouveau.
+  'art-nouveau-v1': {
+    title: 'Art Nouveau (v1)',
+    description: 'Saved snapshot of the Art Nouveau wallpaper: gold-outlined vines growing from concentric halos over a mosaic field.',
+    tags: ['Abstract', 'Relaxing'],
+    sources: ['src/palettes/art-nouveau-v1.js', 'src/modes/art-nouveau-v1.js'],
+    bootstrap: "App.start('art-nouveau-v1');",
+    rootFiles: ['art-nouveau-v1.html']
   }
 };
 
