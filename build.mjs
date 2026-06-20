@@ -16,7 +16,8 @@ const CORE = [
   'src/core/loop.js',
   'src/core/weprops.js',
   'src/core/paint.js',
-  'src/core/color.js'
+  'src/core/color.js',
+  'src/core/motion.js'
 ];
 
 const MODES = {
