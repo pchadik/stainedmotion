@@ -350,7 +350,8 @@
 //   roundels      - concentric polar mosaics, rings rotate with axis r
 //   beads         - pearl strings around roundels and along free arcs
 //   spirals       - whiplash filigree scrolls tucked into the gaps
-//   ribbons       - flow-field whiplash curves, undulate with axis u
+//   vines         - tendrils growing from the roundel rims, undulate with
+//                   axis u; they stop at any roundel they reach (no overlap)
 //   motes         - gold glints advecting along the field, axis p
 // A global time-scale slows the whole piece uniformly (including the motion
 // axes' own variation).
@@ -368,7 +369,7 @@
     var BEAD = 'rgba(214,190,130,0.55)';
     var SCROLL = 'rgba(184,154,94,0.30)';
 
-    var ribbons = [], roundels = [], motes = [], mosaic = [], spirals = [], beadArcs = [];
+    var vines = [], roundels = [], motes = [], mosaic = [], spirals = [], beadArcs = [];
     var curP = 0, animTime = 0, fieldPhase = 0;
     var W = 1, H = 1;
     var SMOOTH_TAU = 470;
@@ -582,21 +583,46 @@
       for (var i = 0; i < MOTE_COUNT; i++) motes.push(spawnMote(w, h, Math.random()));
     }
 
-    // ---- ribbons ----
-    function traceInto(rb, dst) {
-      var x = rb.sx, y = rb.sy;
-      for (var i = 0; i < rb.steps; i++) {
+    // ---- vines (tendrils growing from the roundel rims) ----
+    function insideRoundel(x, y) {
+      for (var i = 0; i < roundels.length; i++) {
+        var rd = roundels[i], dx = x - rd.cx, dy = y - rd.cy, lim = rd.R * 0.96;
+        if (dx * dx + dy * dy < lim * lim) return true;
+      }
+      return false;
+    }
+
+    // Trace a vine from its rim anchor: radial outward bias at the base eases
+    // into the flow field, a gentle curl near the tip, and it stops (collapses
+    // its remaining points) on reaching any roundel so it never overlaps one.
+    function traceVineInto(v, dst) {
+      var x = v.sx, y = v.sy, clipped = false, n = v.steps;
+      for (var i = 0; i < n; i++) {
         if (!dst[i]) dst[i] = { x: x, y: y };
         else { dst[i].x = x; dst[i].y = y; }
-        var a = fieldAngle(x, y);
-        x += Math.cos(a) * rb.ds;
-        y += Math.sin(a) * rb.ds;
+        if (clipped) continue;
+        var t = i / (n - 1);
+        var fa = fieldAngle(x, y);
+        var fvx = Math.cos(fa), fvy = Math.sin(fa);
+        var rad = Math.atan2(y - v.srcCy, x - v.srcCx);
+        var w = Math.exp(-i / 10); // outward bias, decays over ~10 steps
+        var vx = w * Math.cos(rad) + (1 - w) * fvx;
+        var vy = w * Math.sin(rad) + (1 - w) * fvy;
+        if (t > 0.6) { // tendril curl near the tip
+          var ca = v.curl * (t - 0.6), cs = Math.sin(ca), cc = Math.cos(ca);
+          var rx = vx * cc - vy * cs, ry = vx * cs + vy * cc;
+          vx = rx; vy = ry;
+        }
+        var L = Math.hypot(vx, vy) || 1;
+        var nx = x + vx / L * v.ds, ny = y + vy / L * v.ds;
+        if (i >= 3 && insideRoundel(nx, ny)) { clipped = true; continue; }
+        x = nx; y = ny;
       }
       return dst;
     }
 
     var scratch = [];
-    function ribbonPolygon(pts, maxWidth) {
+    function vinePolygon(pts, maxWidth) {
       var n = pts.length, left = [], right = [];
       for (var i = 0; i < n; i++) {
         var p = pts[i];
@@ -604,10 +630,8 @@
         var dx = b.x - a.x, dy = b.y - a.y;
         var len = Math.hypot(dx, dy) || 1;
         var nxp = -dy / len, nyp = dx / len;
-        // Clamp the sine: at i = n-1, Math.PI*i/(n-1) can exceed PI by one ULP,
-        // making sin slightly negative and Math.pow(negative, 0.7) => NaN.
-        var s = Math.sin(Math.PI * i / (n - 1));
-        var taper = Math.pow(s > 0 ? s : 0, 0.7);
+        // Asymmetric taper: thick at the root (rim), fine at the tip.
+        var taper = Math.pow(1 - i / (n - 1), 0.7);
         var hw = maxWidth * taper * 0.5;
         left.push({ x: p.x + nxp * hw, y: p.y + nyp * hw });
         right.push({ x: p.x - nxp * hw, y: p.y - nyp * hw });
@@ -615,25 +639,35 @@
       return left.concat(right.reverse());
     }
 
+    function buildVines(w, h) {
+      vines = [];
+      var minDim = Math.min(w, h);
+      for (var ri = 0; ri < roundels.length; ri++) {
+        var rd = roundels[ri];
+        var count = Math.max(6, Math.round(rd.R / (minDim * 0.03)));
+        var r0 = rd.R * 0.98;
+        for (var k = 0; k < count; k++) {
+          var ang = k / count * Math.PI * 2 + (Math.random() - 0.5) * 0.3;
+          var v = {
+            srcCx: rd.cx, srcCy: rd.cy,
+            sx: rd.cx + Math.cos(ang) * r0, sy: rd.cy + Math.sin(ang) * r0,
+            steps: 70 + Math.floor(Math.random() * 60),
+            ds: minDim * (0.008 + Math.random() * 0.006),
+            width: minDim * (0.007 + Math.random() * 0.013),
+            curl: (Math.random() < 0.5 ? 1 : -1) * (0.15 + Math.random() * 0.25),
+            pts: []
+          };
+          traceVineInto(v, v.pts);
+          vines.push(v);
+        }
+      }
+    }
+
     // ---- lifecycle ----
     function init(w, h) {
       W = w; H = h;
-      ribbons = [];
-      var cols = 4, rows = 4, minDim = Math.min(w, h);
-      for (var i = 0; i < cols * rows; i++) {
-        var c = i % cols, r = Math.floor(i / cols);
-        var rb = {
-          sx: (c + 0.5) / cols * w + (Math.random() - 0.5) * (w / cols) * 0.6,
-          sy: (r + 0.5) / rows * h + (Math.random() - 0.5) * (h / rows) * 0.6,
-          steps: 70 + Math.floor(Math.random() * 60),
-          ds: minDim * (0.008 + Math.random() * 0.006),
-          width: minDim * (0.012 + Math.random() * 0.02),
-          pts: []
-        };
-        traceInto(rb, rb.pts);
-        ribbons.push(rb);
-      }
       roundels = buildRoundels(w, h);
+      buildVines(w, h);
       buildMosaic(w, h);
       buildSpirals(w, h);
       buildBeadArcs(w, h);
@@ -649,14 +683,14 @@
 
       fieldPhase += (effDt / 1000) * (0.025 + 0.18 * m.u);
 
-      // Ribbon inertia uses real dt so the glide stays ~0.5s in wall-clock time.
+      // Vine inertia uses real dt so the glide stays ~0.5s in wall-clock time.
       var alpha = 1 - Math.exp(-dt / SMOOTH_TAU);
-      for (var i = 0; i < ribbons.length; i++) {
-        var rb = ribbons[i];
-        traceInto(rb, scratch);
-        for (var j = 0; j < rb.steps; j++) {
-          rb.pts[j].x += (scratch[j].x - rb.pts[j].x) * alpha;
-          rb.pts[j].y += (scratch[j].y - rb.pts[j].y) * alpha;
+      for (var i = 0; i < vines.length; i++) {
+        var v = vines[i];
+        traceVineInto(v, scratch);
+        for (var j = 0; j < v.steps; j++) {
+          v.pts[j].x += (scratch[j].x - v.pts[j].x) * alpha;
+          v.pts[j].y += (scratch[j].y - v.pts[j].y) * alpha;
         }
       }
 
@@ -692,11 +726,11 @@
       for (var ai = 0; ai < beadArcs.length; ai++) drawBeadArc(ctx, beadArcs[ai]);
       for (var si = 0; si < spirals.length; si++) drawSpiral(ctx, spirals[si]);
 
-      for (var i = 0; i < ribbons.length; i++) {
-        var rb = ribbons[i];
-        var poly = ribbonPolygon(rb.pts, rb.width);
-        var mid = rb.pts[Math.floor(rb.pts.length / 2)];
-        App.fillPolygon(ctx, poly, color.colorToHsl(color.getCellColor(mid.x, mid.y, w, h)));
+      for (var i = 0; i < vines.length; i++) {
+        var v = vines[i];
+        var poly = vinePolygon(v.pts, v.width);
+        var cp = v.pts[Math.floor(v.pts.length * 0.25)]; // color near the live base
+        App.fillPolygon(ctx, poly, color.colorToHsl(color.getCellColor(cp.x, cp.y, w, h)));
         App.strokePolygon(ctx, poly, outline, outlineWidth);
       }
 
