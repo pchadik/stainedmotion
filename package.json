@@ -1,0 +1,10 @@
+{
+  "name": "stainedmotion",
+  "version": "1.0.0",
+  "description": "Generative stained-glass (and future Art Nouveau) animated wallpapers for Wallpaper Engine and the web.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs"
+  }
+}
