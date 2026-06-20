@@ -19,6 +19,7 @@
     var outlineWidth = palette.outlineWidth || 1.6;
 
     var GLOBAL_SPEED = 0.6;
+    var RAY_EXTENT = 1.15; // how far the sunburst reaches out (1.0 = lands on hub)
     var GROUT = 'rgba(184,154,94,0.16)';
     var BEAD = 'rgba(214,190,130,0.55)';
 
@@ -163,7 +164,7 @@
         // Minimum so rays ring the roundel, but never above reach, or the floor
         // would push the peak spike off the hub (and flatten the sunburst on
         // square/portrait canvases where reach < 1.1*R).
-        var floor = Math.min(rd.R * 1.1, ry.reach * 0.97);
+        var floor = Math.min(rd.R * 1.1 * RAY_EXTENT, ry.reach * 0.97);
         if (len < floor) len = floor;
         var ca = Math.cos(a), sa = Math.sin(a);
         var alpha = (0.30 + bump * 0.45).toFixed(3); // visible minimum halo, brighter spike
@@ -389,8 +390,8 @@
         var rq = roundels[qi];
         var ddx = meet.x - rq.cx, ddy = meet.y - rq.cy, dd = Math.hypot(ddx, ddy);
         rq.rays.dirToM = Math.atan2(ddy, ddx);
-        rq.rays.reach = dd - meet.hubR;
-        rq.rays.base = Math.min(rq.R * 1.2, rq.rays.reach * 0.88);
+        rq.rays.reach = (dd - meet.hubR) * RAY_EXTENT;
+        rq.rays.base = Math.min(rq.R * 1.2 * RAY_EXTENT, rq.rays.reach * 0.88);
       }
 
       fieldPhase += (effDt / 1000) * (0.025 + 0.18 * m.u);
