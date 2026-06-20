@@ -369,7 +369,8 @@
     var BEAD = 'rgba(214,190,130,0.55)';
 
     var vines = [], roundels = [], motes = [], mosaic = [];
-    var meet = { x: 0, y: 0, hubR: 1 };
+    var meet = { x: 0, y: 0, hubR: 1 }, meetBase = { x: 0, y: 0 };
+    var ab = { ux: 1, uy: 0, px: 0, py: 1, dist: 1 }; // center-line unit vector + perpendicular
     var curP = 0, animTime = 0, fieldPhase = 0;
     var W = 1, H = 1, builtW = 0, builtH = 0;
     var SMOOTH_TAU = 470;
@@ -451,13 +452,19 @@
         makeRoundel(w * 0.66, h * 0.40, minDim * 0.34),
         makeRoundel(w * 0.20, h * 0.74, minDim * 0.18)
       ];
-      // Meeting point: midpoint between the two roundel centers.
-      meet = { x: (roundels[0].cx + roundels[1].cx) / 2, y: (roundels[0].cy + roundels[1].cy) / 2, hubR: minDim * 0.045 };
+      var A = roundels[0], B = roundels[1];
+      var dx = B.cx - A.cx, dy = B.cy - A.cy, d = Math.hypot(dx, dy) || 1;
+      ab = { ux: dx / d, uy: dy / d, px: -dy / d, py: dx / d, dist: d };
+      // Base meeting point biased toward the smaller (second) roundel so the
+      // larger one's spike has room to be longer than its minimum. The actual
+      // meeting point drifts around this in update().
+      meetBase = { x: A.cx + dx * 0.6, y: A.cy + dy * 0.6 };
+      meet = { x: meetBase.x, y: meetBase.y, hubR: minDim * 0.045 };
+      // Seed each roundel's gap direction now so buildVines (called next, before
+      // the first update) anchors vine clusters on the far side from the gap.
       for (var i = 0; i < roundels.length; i++) {
         var rd = roundels[i];
-        var dx = meet.x - rd.cx, dy = meet.y - rd.cy;
-        rd.rays.dirToM = Math.atan2(dy, dx);
-        rd.rays.reach = Math.hypot(dx, dy) - meet.hubR; // spike tip lands on the hub
+        rd.rays.dirToM = Math.atan2(meetBase.y - rd.cy, meetBase.x - rd.cx);
       }
     }
 
@@ -499,13 +506,17 @@
         // tip is exactly reach (lands on the hub, no handoff jump); at bump=0
         // it is base*jit (the intended idle jitter of the short rays).
         var len = ry.base * ry.jit[i] * (1 - bump) + ry.reach * bump;
-        if (len < r0 + 2) len = r0 + 2;
+        // Minimum so rays ring the roundel, but never above reach, or the floor
+        // would push the peak spike off the hub (and flatten the sunburst on
+        // square/portrait canvases where reach < 1.1*R).
+        var floor = Math.min(rd.R * 1.1, ry.reach * 0.97);
+        if (len < floor) len = floor;
         var ca = Math.cos(a), sa = Math.sin(a);
-        var alpha = (0.16 + bump * 0.5).toFixed(3);
+        var alpha = (0.30 + bump * 0.45).toFixed(3); // visible minimum halo, brighter spike
         App.strokePolyline(ctx, [
           { x: rd.cx + ca * r0, y: rd.cy + sa * r0 },
           { x: rd.cx + ca * len, y: rd.cy + sa * len }
-        ], 'rgba(196,164,104,' + alpha + ')', 1 + bump * 1.6);
+        ], 'rgba(196,164,104,' + alpha + ')', 1.2 + bump * 1.5);
       }
     }
 
@@ -711,6 +722,22 @@
       animTime += effDt;
       var m = motion.sample(animTime);
       var rSpin = 0.15 + 0.85 * m.r;
+
+      // Drift the meeting point gently around its biased base point; both
+      // roundels' longest spikes aim at it (and reach it), so the two longest
+      // lines cross at a point that wanders.
+      var mp = animTime * 0.00018;
+      var offA = ab.dist * 0.06 * Math.sin(mp);
+      var offP = ab.dist * 0.09 * Math.sin(mp * 1.37 + 0.7);
+      meet.x = meetBase.x + ab.ux * offA + ab.px * offP;
+      meet.y = meetBase.y + ab.uy * offA + ab.py * offP;
+      for (var qi = 0; qi < roundels.length; qi++) {
+        var rq = roundels[qi];
+        var ddx = meet.x - rq.cx, ddy = meet.y - rq.cy, dd = Math.hypot(ddx, ddy);
+        rq.rays.dirToM = Math.atan2(ddy, ddx);
+        rq.rays.reach = dd - meet.hubR;
+        rq.rays.base = Math.min(rq.R * 1.2, rq.rays.reach * 0.88);
+      }
 
       fieldPhase += (effDt / 1000) * (0.025 + 0.18 * m.u);
 
