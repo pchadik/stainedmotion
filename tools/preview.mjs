@@ -64,8 +64,8 @@ function hslToRgb(h, s, l) {
 }
 function parse(c) {
   if (c[0] === '#') { const n = parseInt(c.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255, 1]; }
-  let m = c.match(/hsl\(([-\d.]+),\s*([-\d.]+)%,\s*([-\d.]+)%\)/);
-  if (m) return [...hslToRgb((parseFloat(m[1]) % 360 + 360) % 360, +m[2], +m[3]), 1];
+  let m = c.match(/hsla?\(([-\d.]+),\s*([-\d.]+)%,\s*([-\d.]+)%(?:,\s*([-\d.]+))?\)/);
+  if (m) return [...hslToRgb((parseFloat(m[1]) % 360 + 360) % 360, +m[2], +m[3]), m[4] !== undefined ? +m[4] : 1];
   m = c.match(/rgba?\(([-\d.]+),\s*([-\d.]+),\s*([-\d.]+)(?:,\s*([-\d.]+))?\)/);
   if (m) return [+m[1], +m[2], +m[3], m[4] !== undefined ? +m[4] : 1];
   return [128, 128, 128, 1];
