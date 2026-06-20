@@ -24,6 +24,8 @@ const StainedGlassScreensaver = () => {
 
   const rootHueRef = useRef(Math.random() * 360);
   const harmonyTypeRef = useRef(0);
+  const prevHarmonyRef = useRef(0);
+  const harmonyMixRef = useRef(1); // 1 = fully on current harmony, <1 = mid cross-fade
   
   const harmonies = {
     analogous: [0, 30, -30, 15, -15],
@@ -34,11 +36,31 @@ const StainedGlassScreensaver = () => {
   };
   const harmonyNames = Object.keys(harmonies);
 
-  const getHarmonicHue = (cx, cy, w, h) => {
-    const harmony = harmonies[harmonyNames[harmonyTypeRef.current]];
+  // Interpolate between two hues along the shortest angular path.
+  const lerpHue = (a, b, t) => {
+    const d = ((b - a + 540) % 360) - 180;
+    return (a + d * t + 360) % 360;
+  };
+
+  const harmonicHueFor = (harmony, cx, cy, w, h) => {
     const blend = (Math.sin(cx / w * Math.PI * 2) + Math.sin(cy / h * Math.PI * 3)) / 2;
-    const index = Math.floor((blend + 1) / 2 * harmony.length) % harmony.length;
-    return (rootHueRef.current + harmony[index] + 360) % 360;
+    // Continuous position within the palette (no hard quantization step).
+    const pos = (blend + 1) / 2 * harmony.length;
+    const i0 = Math.floor(pos) % harmony.length;
+    const i1 = (i0 + 1) % harmony.length;
+    const frac = pos - Math.floor(pos);
+    const h0 = (rootHueRef.current + harmony[i0] + 360) % 360;
+    const h1 = (rootHueRef.current + harmony[i1] + 360) % 360;
+    return lerpHue(h0, h1, frac);
+  };
+
+  const getHarmonicHue = (cx, cy, w, h) => {
+    const toHue = harmonicHueFor(harmonies[harmonyNames[harmonyTypeRef.current]], cx, cy, w, h);
+    const mix = harmonyMixRef.current;
+    if (mix >= 1) return toHue;
+    // Cross-fade from the previous harmony so a switch sweeps in smoothly.
+    const fromHue = harmonicHueFor(harmonies[harmonyNames[prevHarmonyRef.current]], cx, cy, w, h);
+    return lerpHue(fromHue, toHue, mix);
   };
 
   const hueToColor = (hue, cx, cy, w, h) => {
@@ -60,8 +82,13 @@ const StainedGlassScreensaver = () => {
 
   const shiftColors = (w, h) => {
     rootHueRef.current = (rootHueRef.current + 0.003) % 360;
-    if (Math.random() < 0.00005) {
+    if (harmonyMixRef.current < 1) {
+      // Advance an in-progress cross-fade (~1.7s at 60fps).
+      harmonyMixRef.current = Math.min(1, harmonyMixRef.current + 0.01);
+    } else if (Math.random() < 0.00005) {
+      prevHarmonyRef.current = harmonyTypeRef.current;
       harmonyTypeRef.current = (harmonyTypeRef.current + 1) % harmonyNames.length;
+      harmonyMixRef.current = 0;
     }
   };
 
