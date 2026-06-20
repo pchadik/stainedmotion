@@ -365,7 +365,7 @@
     var outlineWidth = palette.outlineWidth || 1.6;
 
     var GLOBAL_SPEED = 0.6;
-    var RAY_EXTENT = 1.15; // how far the sunburst reaches out (1.0 = lands on hub)
+    var HALO_EXTENT = 1.15; // size of the minimum-ray halo ringing each roundel
     var GROUT = 'rgba(184,154,94,0.16)';
     var BEAD = 'rgba(214,190,130,0.55)';
 
@@ -510,7 +510,7 @@
         // Minimum so rays ring the roundel, but never above reach, or the floor
         // would push the peak spike off the hub (and flatten the sunburst on
         // square/portrait canvases where reach < 1.1*R).
-        var floor = Math.min(rd.R * 1.1 * RAY_EXTENT, ry.reach * 0.97);
+        var floor = Math.min(rd.R * 1.1 * HALO_EXTENT, ry.reach * 0.97);
         if (len < floor) len = floor;
         var ca = Math.cos(a), sa = Math.sin(a);
         var alpha = (0.30 + bump * 0.45).toFixed(3); // visible minimum halo, brighter spike
@@ -615,18 +615,18 @@
       for (var ri = 0; ri < roundels.length; ri++) {
         var rd = roundels[ri];
         var away = rd.rays.dirToM + Math.PI; // clusters on the far side from the gap
-        var clusterAngles = [
-          away - 0.7 + (Math.random() - 0.5) * 0.3,
-          away + 0.7 + (Math.random() - 0.5) * 0.3
-        ];
-        for (var ci = 0; ci < clusterAngles.length; ci++) {
-          var ca = clusterAngles[ci], r0 = rd.R * 0.98;
+        var nClusters = 2 + Math.floor(Math.random() * 3); // up to 4 clusters
+        var arc = 1.3; // half-arc the clusters fan across on the far side
+        for (var ci = 0; ci < nClusters; ci++) {
+          var frac = nClusters > 1 ? ci / (nClusters - 1) : 0.5;
+          var ca = away + (frac - 0.5) * 2 * arc + (Math.random() - 0.5) * 0.25;
+          var r0 = rd.R * 0.98;
           var bx = rd.cx + Math.cos(ca) * r0, by = rd.cy + Math.sin(ca) * r0;
-          var nv = 4 + Math.floor(Math.random() * 3);
+          var nv = 3 + Math.floor(Math.random() * 3); // 3-5 vines per cluster
           for (var j = 0; j < nv; j++) {
-            var spread = ((nv > 1 ? j / (nv - 1) : 0.5) - 0.5) * 1.1;
+            var fan = ((nv > 1 ? j / (nv - 1) : 0.5) - 0.5) * 1.1;
             var v = {
-              sx: bx, sy: by, dir0: ca + spread,
+              sx: bx, sy: by, dir0: ca + fan,
               steps: 80 + Math.floor(Math.random() * 60),
               ds: minDim * (0.008 + Math.random() * 0.006),
               width: minDim * (0.006 + Math.random() * 0.011),
@@ -736,8 +736,8 @@
         var rq = roundels[qi];
         var ddx = meet.x - rq.cx, ddy = meet.y - rq.cy, dd = Math.hypot(ddx, ddy);
         rq.rays.dirToM = Math.atan2(ddy, ddx);
-        rq.rays.reach = (dd - meet.hubR) * RAY_EXTENT;
-        rq.rays.base = Math.min(rq.R * 1.2 * RAY_EXTENT, rq.rays.reach * 0.88);
+        rq.rays.reach = dd; // tip lands on the meeting point, so the two longest spikes just touch
+        rq.rays.base = Math.min(rq.R * 1.2 * HALO_EXTENT, rq.rays.reach * 0.88);
       }
 
       fieldPhase += (effDt / 1000) * (0.025 + 0.18 * m.u);
