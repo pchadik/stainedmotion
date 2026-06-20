@@ -27,7 +27,15 @@ const MODES = {
     tags: ['Abstract', 'Relaxing'],
     sources: ['src/palettes/stained-glass.js', 'src/modes/stained-glass.js'],
     bootstrap: "App.start('stained-glass');",
-    root: true // also written to repo root for GitHub Pages
+    rootFiles: ['index.html', 'stained-glass.html'] // served by GitHub Pages
+  },
+  'art-nouveau': {
+    title: 'Art Nouveau',
+    description: 'Flowing Art Nouveau ribbons in muted, gold-outlined harmonic color, undulating in place.',
+    tags: ['Abstract', 'Relaxing'],
+    sources: ['src/palettes/art-nouveau.js', 'src/modes/art-nouveau.js'],
+    bootstrap: "App.start('art-nouveau');",
+    rootFiles: ['art-nouveau.html']
   }
 };
 
@@ -80,10 +88,9 @@ for (const [name, m] of Object.entries(MODES)) {
   writeFileSync(join(outDir, 'project.json'), projectJson(m));
   console.log(`built build/${name}/  (${files.length} sources, ${html.length} bytes)`);
 
-  if (m.root) {
-    // Keep the existing Pages-served files in sync with the build.
-    writeFileSync(join(ROOT, 'index.html'), html);
-    writeFileSync(join(ROOT, 'stained-glass.html'), html);
-    console.log('  -> copied to root index.html + stained-glass.html');
+  for (const rf of m.rootFiles || []) {
+    // Keep the Pages-served files in sync with the build.
+    writeFileSync(join(ROOT, rf), html);
+    console.log(`  -> copied to root ${rf}`);
   }
 }

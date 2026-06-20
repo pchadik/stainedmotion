@@ -1,0 +1,22 @@
+{
+  "file": "index.html",
+  "general": {
+    "properties": {
+      "schemecolor": {
+        "order": 0,
+        "text": "Scheme Color",
+        "type": "color",
+        "value": "0.04 0.04 0.04"
+      }
+    }
+  },
+  "title": "Art Nouveau",
+  "type": "web",
+  "version": 1,
+  "visibility": "private",
+  "tags": [
+    "Abstract",
+    "Relaxing"
+  ],
+  "description": "Flowing Art Nouveau ribbons in muted, gold-outlined harmonic color, undulating in place."
+}
