@@ -25,6 +25,7 @@
 
     var vines = [], roundels = [], motes = [], mosaic = [];
     var meet = { x: 0, y: 0, hubR: 1 }, meetBase = { x: 0, y: 0 };
+    var hubPos = { x: 0, y: 0 }, hubAlpha = 0, hubInit = false; // hub rides between the two spike tips
     var ab = { ux: 1, uy: 0, px: 0, py: 1, dist: 1 }; // center-line unit vector + perpendicular
     var curP = 0, animTime = 0, fieldPhase = 0;
     var W = 1, H = 1, builtW = 0, builtH = 0;
@@ -175,10 +176,27 @@
       }
     }
 
+    // Tip of a roundel's longest spike (the ray nearest its gap direction).
+    function longestTip(rd) {
+      var ry = rd.rays, step = Math.PI * 2 / ry.count;
+      var k = Math.round((ry.dirToM - ry.phase) / step);
+      var idx = ((k % ry.count) + ry.count) % ry.count;
+      var a = ry.phase + k * step;
+      var c = Math.cos(wrapPi(a - ry.dirToM));
+      var bump = c > 0 ? Math.pow(c, ry.P) : 0;
+      var len = ry.base * ry.jit[idx] * (1 - bump) + ry.reach * bump;
+      var floor = Math.min(rd.R * 1.1 * HALO_EXTENT, ry.reach * 0.97);
+      if (len < floor) len = floor;
+      return { x: rd.cx + Math.cos(a) * len, y: rd.cy + Math.sin(a) * len };
+    }
+
     function drawHub(ctx, w, h) {
-      App.fillCircle(ctx, meet.x, meet.y, meet.hubR * 0.34, color.colorToHsl(color.getCellColor(meet.x, meet.y, w, h)));
-      App.strokePolygon(ctx, circlePoly(meet.x, meet.y, meet.hubR), outline, outlineWidth);
-      App.strokePolygon(ctx, circlePoly(meet.x, meet.y, meet.hubR * 0.62), outline, outlineWidth * 0.8);
+      if (hubAlpha < 0.02) return;
+      var a = hubAlpha.toFixed(3);
+      var c = color.getCellColor(hubPos.x, hubPos.y, w, h);
+      App.fillCircle(ctx, hubPos.x, hubPos.y, meet.hubR * 0.34, 'hsla(' + c.h + ', ' + c.s + '%, ' + c.l + '%, ' + a + ')');
+      App.strokePolygon(ctx, circlePoly(hubPos.x, hubPos.y, meet.hubR), 'rgba(184,154,94,' + a + ')', outlineWidth);
+      App.strokePolygon(ctx, circlePoly(hubPos.x, hubPos.y, meet.hubR * 0.62), 'rgba(184,154,94,' + (hubAlpha * 0.85).toFixed(3) + ')', outlineWidth * 0.8);
     }
 
     function drawRoundel(ctx, rd, w, h) {
@@ -362,6 +380,7 @@
       buildMosaic(w, h);
       initMotes(w, h);
       builtW = w; builtH = h;
+      hubInit = false; // re-snap the hub to the new geometry
     }
 
     function init(w, h) {
@@ -414,6 +433,21 @@
         for (var bi = 0; bi < rd.bands.length; bi++) rd.bands[bi].phase += (effDt / 1000) * rd.bands[bi].rate * rSpin;
         rd.rays.phase += (effDt / 1000) * rd.rays.rate * rSpin;
         rd.bead.phase += (effDt / 1000) * rd.bead.rate * rSpin;
+      }
+
+      // Hub rides at the midpoint of the two longest-ray tips and fades in as
+      // those tips converge (close = most visible). Lightly eased so the
+      // discrete ray-handoff snaps don't pop.
+      var tA = longestTip(roundels[0]), tB = longestTip(roundels[1]);
+      var hmx = (tA.x + tB.x) / 2, hmy = (tA.y + tB.y) / 2;
+      var gap = Math.hypot(tA.x - tB.x, tA.y - tB.y);
+      var tAlpha = Math.max(0, 1 - gap / (meet.hubR * 1.4));
+      if (!hubInit) { hubPos.x = hmx; hubPos.y = hmy; hubAlpha = tAlpha; hubInit = true; }
+      else {
+        var ke = 1 - Math.exp(-dt / 120);
+        hubPos.x += (hmx - hubPos.x) * ke;
+        hubPos.y += (hmy - hubPos.y) * ke;
+        hubAlpha += (tAlpha - hubAlpha) * ke;
       }
 
       curP = m.p;
