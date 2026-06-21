@@ -1,5 +1,6 @@
 {
   "file": "index.html",
+  "preview": "preview.png",
   "general": {
     "properties": {
       "schemecolor": {
@@ -10,7 +11,7 @@
       }
     }
   },
-  "title": "Art Nouveau (v1)",
+  "title": "Art Nouveau — Organic",
   "type": "web",
   "version": 1,
   "visibility": "private",
@@ -18,5 +19,5 @@
     "Abstract",
     "Relaxing"
   ],
-  "description": "Saved snapshot of the Art Nouveau wallpaper: gold-outlined vines growing from concentric halos over a mosaic field."
+  "description": "Art Nouveau: leafy, budding vines sprout in clusters from two haloed roundels whose sunbursts reach toward a drifting meeting point, all over a mosaic field."
 }

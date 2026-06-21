@@ -1,4 +1,4 @@
-// Art Nouveau mode (working version). Layers, back to front:
+// Art Nouveau mode — public name "Organic" (v2). Layers, back to front:
 //   mosaic field  - low-contrast tessellation covering the whole canvas
 //   rays          - per-roundel sunburst whose length/weight peaks toward the
 //                   other roundel; the peak spike reaches a shared meeting hub

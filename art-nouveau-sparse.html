@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Art Nouveau (v1)</title>
+  <title>Art Nouveau — Sparse</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0a0a; }
@@ -343,11 +343,12 @@
 })(window.App = window.App || {});
 
 /* ===== src/modes/art-nouveau-v1.js ===== */
-// Art Nouveau v1 — FROZEN SNAPSHOT. A preserved copy of the Art Nouveau mode
-// at this point in its evolution, kept stable while the working `art-nouveau`
-// mode continues to change. Do not edit for new features; tweak art-nouveau.js
-// instead. Layers, back to front: mosaic field, sunburst rays, roundels,
-// beads, spirals, vines (axis u), motes (axis p); global time-scale slows all.
+// Art Nouveau v1 — public name "Sparse". FROZEN SNAPSHOT, a preserved copy of
+// the Art Nouveau mode at this point in its evolution, kept stable while the
+// working "Organic" mode (art-nouveau.js) continues to change. Do not edit for
+// new features; tweak art-nouveau.js instead. Layers, back to front: mosaic
+// field, sunburst rays, roundels, beads, spirals, vines (axis u), motes
+// (axis p); global time-scale slows all.
 (function (App) {
   App.createArtNouveauV1 = function (deps) {
     var color = deps.color;
@@ -754,7 +755,8 @@
         return { color: color, mode: App.createStainedGlass({ color: color }) };
       }
     },
-    'art-nouveau': {
+    // Art Nouveau "Organic" (v2) — src/modes/art-nouveau.js.
+    'art-nouveau-organic': {
       background: '#12100c',
       create: function () {
         var color = App.createColorEngine(App.palettes.artNouveau);
@@ -765,8 +767,8 @@
         };
       }
     },
-    // Frozen snapshot of the Art Nouveau mode (see src/modes/art-nouveau-v1.js).
-    'art-nouveau-v1': {
+    // Art Nouveau "Sparse" (v1, frozen) — src/modes/art-nouveau-v1.js.
+    'art-nouveau-sparse': {
       background: '#12100c',
       create: function () {
         var color = App.createColorEngine(App.palettes.artNouveauV1);
@@ -804,7 +806,7 @@
   };
 })(window.App = window.App || {});
 
-    App.start('art-nouveau-v1');
+    App.start('art-nouveau-sparse');
   </script>
 </body>
 </html>

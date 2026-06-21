@@ -1,7 +1,9 @@
 // Zero-dependency build: concatenate the App-namespace source files and inline
 // them into one self-contained index.html per mode (no CDN, no module loading),
-// then emit each mode's Wallpaper Engine project.json. The stained-glass build
-// is also copied to the repo root so the GitHub Pages demo keeps working.
+// then emit each mode's Wallpaper Engine project.json plus its standalone demo
+// page at the repo root (served by GitHub Pages). The root index.html is the
+// hand-written landing page and is NOT generated here. Run `npm run package`
+// to also generate preview images and the Wallpaper Engine .zip modules.
 import { readFileSync, writeFileSync, mkdirSync, cpSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -20,31 +22,34 @@ const CORE = [
   'src/core/motion.js'
 ];
 
+// Public mode keys (build folder / page / zip names). Source files keep their
+// historical names: art-nouveau-v1.js is "Sparse", art-nouveau.js is "Organic".
 const MODES = {
   'stained-glass': {
     title: 'Stained Glass',
-    description: 'Animated stained glass effect with slowly drifting lines and harmonically colored cells.',
+    description: 'Animated stained glass: leaded lines drift across the canvas and the panes they form fill with slowly shifting harmonic color.',
     tags: ['Abstract', 'Relaxing'],
     sources: ['src/palettes/stained-glass.js', 'src/modes/stained-glass.js'],
     bootstrap: "App.start('stained-glass');",
-    rootFiles: ['index.html', 'stained-glass.html'] // served by GitHub Pages
+    rootFiles: ['stained-glass.html']
   },
-  'art-nouveau': {
-    title: 'Art Nouveau',
-    description: 'Flowing Art Nouveau ribbons in muted, gold-outlined harmonic color, undulating in place.',
-    tags: ['Abstract', 'Relaxing'],
-    sources: ['src/palettes/art-nouveau.js', 'src/modes/art-nouveau.js'],
-    bootstrap: "App.start('art-nouveau');",
-    rootFiles: ['art-nouveau.html']
-  },
-  // Frozen snapshot — built from the *-v1 sources, independent of art-nouveau.
-  'art-nouveau-v1': {
-    title: 'Art Nouveau (v1)',
-    description: 'Saved snapshot of the Art Nouveau wallpaper: gold-outlined vines growing from concentric halos over a mosaic field.',
+  // Art Nouveau "Sparse" — the frozen v1 composition.
+  'art-nouveau-sparse': {
+    title: 'Art Nouveau — Sparse',
+    description: 'Art Nouveau: gold-outlined vines splay from two concentric halos over a mosaic field, with filigree scrolls and drifting motes. The earlier, airier composition.',
     tags: ['Abstract', 'Relaxing'],
     sources: ['src/palettes/art-nouveau-v1.js', 'src/modes/art-nouveau-v1.js'],
-    bootstrap: "App.start('art-nouveau-v1');",
-    rootFiles: ['art-nouveau-v1.html']
+    bootstrap: "App.start('art-nouveau-sparse');",
+    rootFiles: ['art-nouveau-sparse.html']
+  },
+  // Art Nouveau "Organic" — the current v2 composition.
+  'art-nouveau-organic': {
+    title: 'Art Nouveau — Organic',
+    description: 'Art Nouveau: leafy, budding vines sprout in clusters from two haloed roundels whose sunbursts reach toward a drifting meeting point, all over a mosaic field.',
+    tags: ['Abstract', 'Relaxing'],
+    sources: ['src/palettes/art-nouveau.js', 'src/modes/art-nouveau.js'],
+    bootstrap: "App.start('art-nouveau-organic');",
+    rootFiles: ['art-nouveau-organic.html']
   }
 };
 
@@ -71,6 +76,7 @@ ${bootstrap}
 
 const projectJson = (m) => JSON.stringify({
   file: 'index.html',
+  preview: 'preview.png',
   general: {
     properties: {
       schemecolor: { order: 0, text: 'Scheme Color', type: 'color', value: '0.04 0.04 0.04' }

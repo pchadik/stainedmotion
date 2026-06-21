@@ -1,12 +1,13 @@
 {
   "name": "stainedmotion",
   "version": "1.0.0",
-  "description": "Generative stained-glass (and future Art Nouveau) animated wallpapers for Wallpaper Engine and the web.",
+  "description": "Generative stained-glass and Art Nouveau animated wallpapers for Wallpaper Engine and the web.",
   "private": true,
   "type": "module",
   "scripts": {
     "build": "node build.mjs",
-    "test": "node build.mjs && node test/motion.test.mjs && node test/smoke.test.mjs stained-glass && node test/smoke.test.mjs art-nouveau && node test/smoke.test.mjs art-nouveau-v1",
-    "preview": "node build.mjs && node tools/preview.mjs"
+    "test": "node build.mjs && node test/motion.test.mjs && node test/smoke.test.mjs stained-glass && node test/smoke.test.mjs art-nouveau-sparse && node test/smoke.test.mjs art-nouveau-organic",
+    "preview": "node build.mjs && node tools/preview.mjs",
+    "package": "node package.mjs"
   }
 }

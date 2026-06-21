@@ -1,5 +1,6 @@
 {
   "file": "index.html",
+  "preview": "preview.png",
   "general": {
     "properties": {
       "schemecolor": {
@@ -18,5 +19,5 @@
     "Abstract",
     "Relaxing"
   ],
-  "description": "Animated stained glass effect with slowly drifting lines and harmonically colored cells."
+  "description": "Animated stained glass: leaded lines drift across the canvas and the panes they form fill with slowly shifting harmonic color."
 }

@@ -1,680 +1,116 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Stained Glass</title>
+  <title>Stained Motion — generative animated wallpapers</title>
+  <meta name="description" content="Generative stained-glass and Art Nouveau animated wallpapers for the web and Wallpaper Engine.">
   <style>
+    :root { --bg: #0c0b10; --panel: #16141d; --ink: #e8e4dd; --muted: #a59db0; --gold: #b89a5e; --line: #2a2733; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0a0a; }
+    body {
+      background: radial-gradient(1200px 700px at 70% -10%, #1a1726, var(--bg) 60%);
+      color: var(--ink);
+      font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      min-height: 100vh;
+      padding: 4rem 1.25rem 3rem;
+    }
+    .wrap { max-width: 1040px; margin: 0 auto; }
+    header { margin-bottom: 2.5rem; }
+    h1 { font-size: clamp(2rem, 5vw, 3rem); font-weight: 600; letter-spacing: -0.02em; }
+    h1 .dot { color: var(--gold); }
+    .tagline { color: var(--muted); font-size: 1.1rem; margin-top: 0.5rem; max-width: 60ch; }
+    h2 { font-size: 1.25rem; font-weight: 600; margin: 2.5rem 0 1rem; letter-spacing: -0.01em; }
+    a { color: var(--gold); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.25rem; }
+    .card {
+      background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+      overflow: hidden; display: flex; flex-direction: column;
+    }
+    .card .thumb { display: block; aspect-ratio: 16 / 9; width: 100%; object-fit: cover; background: #0a0a0a; border-bottom: 1px solid var(--line); }
+    .card .body { padding: 1rem 1.1rem 1.2rem; display: flex; flex-direction: column; gap: 0.5rem; flex: 1; }
+    .card h3 { font-size: 1.1rem; font-weight: 600; }
+    .card p { color: var(--muted); font-size: 0.93rem; flex: 1; }
+    .actions { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-top: 0.4rem; }
+    .btn {
+      display: inline-block; padding: 0.45rem 0.85rem; border-radius: 9px; font-size: 0.9rem;
+      border: 1px solid var(--line);
+    }
+    .btn.primary { background: var(--gold); color: #1a1408; border-color: var(--gold); font-weight: 600; }
+    .btn.primary:hover { text-decoration: none; filter: brightness(1.08); }
+    .btn.ghost:hover { text-decoration: none; border-color: var(--gold); color: var(--gold); }
+    .notes { color: var(--muted); }
+    .notes ul { margin: 0.5rem 0 0 1.1rem; }
+    .notes li { margin: 0.35rem 0; }
+    .notes strong { color: var(--ink); font-weight: 600; }
+    footer { margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.9rem; }
   </style>
 </head>
 <body>
-  <div id="root"></div>
-  <script>
-/* ===== src/core/canvas.js ===== */
-// Full-screen canvas bootstrap shared by every mode.
-(function (App) {
-  App.createCanvas = function (opts) {
-    opts = opts || {};
-    var canvas = document.createElement('canvas');
-    var s = canvas.style;
-    s.position = 'fixed';
-    s.top = '0';
-    s.left = '0';
-    s.width = '100%';
-    s.height = '100%';
-    s.background = opts.background || '#0a0a0a';
-    s.cursor = 'none';
-
-    var mount = opts.mount ? document.querySelector(opts.mount) : null;
-    (mount || document.body).appendChild(canvas);
-
-    var ctx = canvas.getContext('2d');
-
-    function resize() {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-    }
-    resize();
-    window.addEventListener('resize', resize);
-
-    return {
-      canvas: canvas,
-      ctx: ctx,
-      get width() { return canvas.width; },
-      get height() { return canvas.height; },
-      setBackground: function (c) { s.background = c; },
-      destroy: function () {
-        window.removeEventListener('resize', resize);
-        if (canvas.parentNode) canvas.parentNode.removeChild(canvas);
-      }
-    };
-  };
-})(window.App = window.App || {});
-
-/* ===== src/core/loop.js ===== */
-// requestAnimationFrame loop with start/stop. Passes (dt, time) in ms.
-(function (App) {
-  App.createLoop = function (fn) {
-    var raf = null;
-    var last = 0;
-    var running = false;
-
-    function frame(t) {
-      if (!running) return;
-      var dt = last ? t - last : 16.7;
-      last = t;
-      fn(dt, t);
-      raf = requestAnimationFrame(frame);
-    }
-
-    return {
-      start: function () {
-        if (running) return;
-        running = true;
-        last = 0;
-        raf = requestAnimationFrame(frame);
-      },
-      stop: function () {
-        running = false;
-        if (raf) cancelAnimationFrame(raf);
-      }
-    };
-  };
-})(window.App = window.App || {});
-
-/* ===== src/core/weprops.js ===== */
-// Wallpaper Engine user-property plumbing, with sane fallbacks when run
-// outside WE (e.g. the GitHub Pages demo, where the listener never fires).
-(function (App) {
-  // WE sends colors as space-separated floats in 0..1, e.g. "0.04 0.04 0.04".
-  function weColorToCss(v) {
-    var parts = String(v).split(' ').map(parseFloat);
-    if (parts.length < 3 || parts.some(isNaN)) return null;
-    return 'rgb(' + Math.round(parts[0] * 255) + ',' +
-                    Math.round(parts[1] * 255) + ',' +
-                    Math.round(parts[2] * 255) + ')';
-  }
-
-  App.createSettings = function (defaults, onChange) {
-    var settings = Object.assign({}, defaults);
-
-    window.wallpaperPropertyListener = {
-      applyUserProperties: function (props) {
-        if (props.schemecolor && props.schemecolor.value != null) {
-          var css = weColorToCss(props.schemecolor.value);
-          if (css) settings.background = css;
-        }
-        if (onChange) onChange(settings);
-      }
-    };
-
-    return settings;
-  };
-})(window.App = window.App || {});
-
-/* ===== src/core/paint.js ===== */
-// Low-level drawing helpers shared by the renderers.
-(function (App) {
-  App.clear = function (ctx, w, h, color) {
-    ctx.fillStyle = color;
-    ctx.fillRect(0, 0, w, h);
-  };
-
-  function tracePath(ctx, pts) {
-    ctx.beginPath();
-    ctx.moveTo(pts[0].x, pts[0].y);
-    for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
-    ctx.closePath();
-  }
-
-  App.fillPolygon = function (ctx, pts, fillStyle) {
-    ctx.fillStyle = fillStyle;
-    tracePath(ctx, pts);
-    ctx.fill();
-  };
-
-  // Cloisonné-style outline around a closed polygon.
-  App.strokePolygon = function (ctx, pts, strokeStyle, width) {
-    ctx.strokeStyle = strokeStyle;
-    ctx.lineWidth = width;
-    ctx.lineJoin = 'round';
-    tracePath(ctx, pts);
-    ctx.stroke();
-  };
-
-  // Open polyline (rays, spirals).
-  App.strokePolyline = function (ctx, pts, strokeStyle, width) {
-    ctx.strokeStyle = strokeStyle;
-    ctx.lineWidth = width;
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(pts[0].x, pts[0].y);
-    for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
-    ctx.stroke();
-  };
-
-  App.fillCircle = function (ctx, cx, cy, r, style) {
-    ctx.fillStyle = style;
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.fill();
-  };
-})(window.App = window.App || {});
-
-/* ===== src/core/color.js ===== */
-// Harmonic color engine: a slowly drifting root hue, harmony palettes that
-// cross-fade when they switch, and smooth (non-quantized) hue interpolation so
-// cells never flip abruptly. Driven entirely by a palette config so each mode
-// can supply its own harmonies and saturation/lightness ranges.
-(function (App) {
-  App.createColorEngine = function (palette) {
-    var p = palette;
-    var harmonyNames = Object.keys(p.harmonies);
-
-    var rootHue = Math.random() * 360;
-    var harmonyType = 0;
-    var prevHarmony = 0;
-    var harmonyMix = 1; // 1 = fully on current harmony, <1 = mid cross-fade
-
-    // Interpolate between two hues along the shortest angular path.
-    function lerpHue(a, b, t) {
-      var d = ((b - a + 540) % 360) - 180;
-      return (a + d * t + 360) % 360;
-    }
-
-    function harmonicHueFor(harmony, cx, cy, w, h) {
-      var blend = (Math.sin(cx / w * Math.PI * p.blendFreqX) +
-                   Math.sin(cy / h * Math.PI * p.blendFreqY)) / 2;
-      // Continuous position within the palette (no hard quantization step).
-      var pos = (blend + 1) / 2 * harmony.length;
-      var i0 = Math.floor(pos) % harmony.length;
-      var i1 = (i0 + 1) % harmony.length;
-      var frac = pos - Math.floor(pos);
-      var h0 = (rootHue + harmony[i0] + 360) % 360;
-      var h1 = (rootHue + harmony[i1] + 360) % 360;
-      return lerpHue(h0, h1, frac);
-    }
-
-    function getHarmonicHue(cx, cy, w, h) {
-      var toHue = harmonicHueFor(p.harmonies[harmonyNames[harmonyType]], cx, cy, w, h);
-      if (harmonyMix >= 1) return toHue;
-      // Cross-fade from the previous harmony so a switch sweeps in smoothly.
-      var fromHue = harmonicHueFor(p.harmonies[harmonyNames[prevHarmony]], cx, cy, w, h);
-      return lerpHue(fromHue, toHue, harmonyMix);
-    }
-
-    function hueToColor(hue, cx, cy, w, h) {
-      var sVal = Math.sin(cx / w * Math.PI * p.satFreqX + cy / h * Math.PI * p.satFreqY);
-      var lVal = Math.sin(cx / w * Math.PI * p.lightFreqX + cy / h * Math.PI * p.lightFreqY);
-      return { h: hue, s: p.satBase + sVal * p.satAmp, l: p.lightBase + lVal * p.lightAmp };
-    }
-
-    function colorToHsl(c) {
-      return 'hsl(' + c.h + ', ' + c.s + '%, ' + c.l + '%)';
-    }
-
-    function getCellColor(cx, cy, w, h) {
-      var x = Math.max(0, Math.min(w, cx));
-      var y = Math.max(0, Math.min(h, cy));
-      return hueToColor(getHarmonicHue(x, y, w, h), x, y, w, h);
-    }
-
-    // Advance the slow hue drift and any in-progress harmony cross-fade.
-    function tick() {
-      rootHue = (rootHue + p.hueDrift) % 360;
-      if (harmonyMix < 1) {
-        harmonyMix = Math.min(1, harmonyMix + p.crossfadeStep);
-      } else if (Math.random() < p.harmonySwitchProb) {
-        prevHarmony = harmonyType;
-        harmonyType = (harmonyType + 1) % harmonyNames.length;
-        harmonyMix = 0;
-      }
-    }
-
-    return {
-      getCellColor: getCellColor,
-      colorToHsl: colorToHsl,
-      tick: tick
-    };
-  };
-})(window.App = window.App || {});
-
-/* ===== src/core/motion.js ===== */
-// Three independent motion axes, each a value in [0,1] that drifts on its own
-// incommensurate cycle so the scene keeps recomposing instead of looping:
-//   u - undulation (flow-field breathing)
-//   r - rotation   (roundels / polar mosaic spin)
-//   p - particles  (motes advecting along the streamlines)
-// A soft floor on combined energy keeps it from ever going fully still.
-// Master intensity and per-axis enable/cap hooks back the future WE properties.
-(function (App) {
-  App.createMotion = function (config) {
-    config = config || {};
-    var intensity = config.intensity != null ? config.intensity : 1;
-    var enabled = Object.assign({ u: true, r: true, p: true }, config.enabled);
-    var cap = Object.assign({ u: 1, r: 1, p: 1 }, config.cap);
-    var minEnergy = config.minEnergy != null ? config.minEnergy : 0.6;
-
-    // Each axis blends two sine components at incommensurate periods (seconds).
-    // Randomized phase offsets make every run start differently.
-    function axis(p1, p2) {
-      return {
-        w1: 2 * Math.PI / p1,
-        w2: 2 * Math.PI / p2,
-        o1: Math.random() * Math.PI * 2,
-        o2: Math.random() * Math.PI * 2
-      };
-    }
-    var defs = {
-      u: axis(41, 17),
-      r: axis(53, 23),
-      p: axis(67, 29)
-    };
-
-    // Amplitudes 0.7 + 0.3 keep the result within [0,1].
-    function raw(a, ts) {
-      return 0.5 + 0.5 * (0.7 * Math.sin(a.w1 * ts + a.o1) + 0.3 * Math.sin(a.w2 * ts + a.o2));
-    }
-
-    var values = { u: 0, r: 0, p: 0 };
-
-    function sample(timeMs) {
-      var ts = timeMs / 1000;
-      var u = raw(defs.u, ts);
-      var r = raw(defs.r, ts);
-      var p = raw(defs.p, ts);
-
-      // Soft floor on combined energy so the scene never flatlines.
-      var energy = u + r + p;
-      if (energy < minEnergy) {
-        var lift = (minEnergy - energy) / 3;
-        u = Math.min(1, u + lift);
-        r = Math.min(1, r + lift);
-        p = Math.min(1, p + lift);
-      }
-
-      // Per-axis enable/cap and master intensity (a user override that can
-      // suppress motion entirely, applied after the natural floor).
-      values.u = (enabled.u ? cap.u : 0) * intensity * u;
-      values.r = (enabled.r ? cap.r : 0) * intensity * r;
-      values.p = (enabled.p ? cap.p : 0) * intensity * p;
-      return values;
-    }
-
-    return {
-      sample: sample,
-      values: values,
-      setIntensity: function (v) { intensity = v; },
-      setEnabled: function (axisKey, on) { enabled[axisKey] = on; },
-      setCap: function (axisKey, v) { cap[axisKey] = v; }
-    };
-  };
-})(window.App = window.App || {});
-
-/* ===== src/palettes/stained-glass.js ===== */
-// Saturated stained-glass palette. These constants reproduce the original
-// look exactly; a future Art Nouveau palette supplies its own muted values.
-(function (App) {
-  App.palettes = App.palettes || {};
-  App.palettes.stainedGlass = {
-    harmonies: {
-      analogous: [0, 30, -30, 15, -15],
-      triadic: [0, 120, 240],
-      splitComplementary: [0, 150, 210],
-      tetradic: [0, 90, 180, 270],
-      complementary: [0, 180, 30, 210]
-    },
-    satBase: 35, satAmp: 10,
-    lightBase: 38, lightAmp: 8,
-    blendFreqX: 2, blendFreqY: 3,
-    satFreqX: 1.5, satFreqY: 1,
-    lightFreqX: 1, lightFreqY: 1.7,
-    hueDrift: 0.003,
-    harmonySwitchProb: 0.00005,
-    crossfadeStep: 0.01
-  };
-})(window.App = window.App || {});
-
-/* ===== src/modes/stained-glass.js ===== */
-// Stained-glass mode: straight infinite lines drift across the canvas; the
-// planar subdivision they form is extracted into faces, each filled with a
-// harmonic color and separated by dark "leading".
-(function (App) {
-  App.createStainedGlass = function (deps) {
-    var color = deps.color;
-    var lines = [];
-
-    function init(w, h) {
-      lines = [];
-
-      var numHorizontal = 3 + Math.floor(Math.random() * 4);
-      var hSpacing = h / (numHorizontal + 1);
-      for (var i = 0; i < numHorizontal; i++) {
-        lines.push({
-          px: w / 2,
-          py: hSpacing * (i + 1) + (Math.random() - 0.5) * hSpacing * 0.5,
-          angle: (Math.random() - 0.5) * Math.PI * 0.5,
-          velocity: (Math.random() - 0.5) * 0.08,
-          angleVelocity: (Math.random() - 0.5) * 0.00008,
-          isHorizontal: true
-        });
-      }
-
-      var numVertical = 5 + Math.floor(Math.random() * 5);
-      var vSpacing = w / (numVertical + 1);
-      for (var j = 0; j < numVertical; j++) {
-        lines.push({
-          px: vSpacing * (j + 1) + (Math.random() - 0.5) * vSpacing * 0.5,
-          py: h / 2,
-          angle: Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 0.5,
-          velocity: (Math.random() - 0.5) * 0.1,
-          angleVelocity: (Math.random() - 0.5) * 0.00008,
-          isHorizontal: false
-        });
-      }
-    }
-
-    function update(w, h) {
-      lines.forEach(function (line) {
-        if (line.isHorizontal) {
-          line.py += line.velocity;
-          if (line.py < 50 || line.py > h - 50) {
-            line.velocity *= -1;
-            line.py = Math.max(50, Math.min(h - 50, line.py));
-          }
-        } else {
-          line.px += line.velocity;
-          if (line.px < 50 || line.px > w - 50) {
-            line.velocity *= -1;
-            line.px = Math.max(50, Math.min(w - 50, line.px));
-          }
-        }
-
-        line.angle += line.angleVelocity;
-
-        var baseAngle = line.isHorizontal ? 0 : Math.PI / 2;
-        var angleDiff = line.angle - baseAngle;
-        if (Math.abs(angleDiff) > Math.PI * 0.33) {
-          line.angleVelocity *= -1;
-        }
-
-        if (Math.random() < 0.002) {
-          line.velocity += (Math.random() - 0.5) * 0.02;
-          var maxV = line.isHorizontal ? 0.15 : 0.18;
-          line.velocity = Math.max(-maxV, Math.min(maxV, line.velocity));
-        }
-      });
-    }
-
-    var lineIntersection = function (line1, line2) {
-      var dx1 = Math.cos(line1.angle);
-      var dy1 = Math.sin(line1.angle);
-      var dx2 = Math.cos(line2.angle);
-      var dy2 = Math.sin(line2.angle);
-
-      var cross = dx1 * dy2 - dy1 * dx2;
-      if (Math.abs(cross) < 1e-10) return null;
-
-      var dpx = line2.px - line1.px;
-      var dpy = line2.py - line1.py;
-      var t = (dpx * dy2 - dpy * dx2) / cross;
-
-      return { x: line1.px + dx1 * t, y: line1.py + dy1 * t };
-    };
-
-    var centroid = function (vertices) {
-      var cx = 0, cy = 0;
-      vertices.forEach(function (v) { cx += v.x; cy += v.y; });
-      return { x: cx / vertices.length, y: cy / vertices.length };
-    };
-
-    var signedArea = function (vertices) {
-      var area = 0;
-      for (var i = 0; i < vertices.length; i++) {
-        var j = (i + 1) % vertices.length;
-        area += vertices[i].x * vertices[j].y;
-        area -= vertices[j].x * vertices[i].y;
-      }
-      return area / 2;
-    };
-
-    var extractFaces = function (lines, w, h) {
-      var margin = 50;
-      var allLines = [
-        { px: -margin, py: 0, angle: Math.PI / 2 },
-        { px: w + margin, py: 0, angle: Math.PI / 2 },
-        { px: 0, py: -margin, angle: 0 },
-        { px: 0, py: h + margin, angle: 0 }
-      ].concat(lines);
-
-      var vertices = [];
-      var vertexMap = new Map();
-
-      var addVertex = function (x, y) {
-        var key = Math.round(x) + ',' + Math.round(y);
-        if (vertexMap.has(key)) return vertexMap.get(key);
-        var idx = vertices.length;
-        vertices.push({ x: x, y: y, edges: [] });
-        vertexMap.set(key, idx);
-        return idx;
-      };
-
-      var vertexLines = new Map();
-
-      for (var i = 0; i < allLines.length; i++) {
-        for (var j = i + 1; j < allLines.length; j++) {
-          var pt = lineIntersection(allLines[i], allLines[j]);
-          if (pt && pt.x >= -margin - 1 && pt.x <= w + margin + 1 &&
-              pt.y >= -margin - 1 && pt.y <= h + margin + 1) {
-            var vIdx = addVertex(pt.x, pt.y);
-            if (!vertexLines.has(vIdx)) vertexLines.set(vIdx, new Set());
-            vertexLines.get(vIdx).add(i);
-            vertexLines.get(vIdx).add(j);
-          }
-        }
-      }
-
-      var edges = [];
-      var edgeMap = new Map();
-
-      var addEdge = function (v1, v2) {
-        if (v1 === v2) return -1;
-        var key = v1 < v2 ? v1 + ',' + v2 : v2 + ',' + v1;
-        if (edgeMap.has(key)) return edgeMap.get(key);
-        var idx = edges.length;
-        edges.push({ v1: v1, v2: v2 });
-        edgeMap.set(key, idx);
-        vertices[v1].edges.push(idx);
-        vertices[v2].edges.push(idx);
-        return idx;
-      };
-
-      for (var lineIdx = 0; lineIdx < allLines.length; lineIdx++) {
-        var line = allLines[lineIdx];
-        var dx = Math.cos(line.angle);
-        var dy = Math.sin(line.angle);
-
-        var onLine = [];
-        vertices.forEach(function (v, vIdx) {
-          if (vertexLines.has(vIdx) && vertexLines.get(vIdx).has(lineIdx)) {
-            var t = (v.x - line.px) * dx + (v.y - line.py) * dy;
-            onLine.push({ idx: vIdx, t: t });
-          }
-        });
-
-        onLine.sort(function (a, b) { return a.t - b.t; });
-
-        for (var k = 0; k < onLine.length - 1; k++) {
-          addEdge(onLine[k].idx, onLine[k + 1].idx);
-        }
-      }
-
-      vertices.forEach(function (v, vIdx) {
-        v.edges.sort(function (e1, e2) {
-          var edge1 = edges[e1];
-          var edge2 = edges[e2];
-          var other1 = edge1.v1 === vIdx ? edge1.v2 : edge1.v1;
-          var other2 = edge2.v1 === vIdx ? edge2.v2 : edge2.v1;
-          var angle1 = Math.atan2(vertices[other1].y - v.y, vertices[other1].x - v.x);
-          var angle2 = Math.atan2(vertices[other2].y - v.y, vertices[other2].x - v.x);
-          return angle1 - angle2;
-        });
-      });
-
-      var faces = [];
-      var usedHalfEdges = new Set();
-      var getHalfEdgeKey = function (edgeIdx, fromVertex) { return edgeIdx + ',' + fromVertex; };
-
-      for (var startVIdx = 0; startVIdx < vertices.length; startVIdx++) {
-        var startVertex = vertices[startVIdx];
-
-        for (var ei = 0; ei < startVertex.edges.length; ei++) {
-          var startEdgeIdx = startVertex.edges[ei];
-          var startKey = getHalfEdgeKey(startEdgeIdx, startVIdx);
-          if (usedHalfEdges.has(startKey)) continue;
-
-          var faceVertices = [];
-          var currentV = startVIdx;
-          var currentE = startEdgeIdx;
-          var safety = 0;
-
-          while (safety < 100) {
-            safety++;
-            var key = getHalfEdgeKey(currentE, currentV);
-            if (usedHalfEdges.has(key)) break;
-            usedHalfEdges.add(key);
-
-            var edge = edges[currentE];
-            var nextV = edge.v1 === currentV ? edge.v2 : edge.v1;
-            faceVertices.push({ x: vertices[nextV].x, y: vertices[nextV].y });
-
-            var nextVertex = vertices[nextV];
-            if (nextVertex.edges.length < 2) break;
-
-            var currentEdgePos = nextVertex.edges.indexOf(currentE);
-            if (currentEdgePos === -1) break;
-
-            var nextEdgePos = (currentEdgePos + nextVertex.edges.length - 1) % nextVertex.edges.length;
-            var nextE = nextVertex.edges[nextEdgePos];
-
-            currentV = nextV;
-            currentE = nextE;
-
-            if (currentV === startVIdx && currentE === startEdgeIdx) break;
-          }
-
-          if (faceVertices.length >= 3) {
-            var area = signedArea(faceVertices);
-            var maxArea = (w + 2 * margin) * (h + 2 * margin) * 0.8;
-            if (Math.abs(area) > 10 && Math.abs(area) < maxArea) {
-              if (area < 0) faceVertices.reverse();
-              faces.push(faceVertices);
-            }
-          }
-        }
-      }
-
-      return faces;
-    };
-
-    function render(ctx, w, h, env) {
-      App.clear(ctx, w, h, env.background);
-
-      var faces = extractFaces(lines, w, h);
-      faces.forEach(function (face) {
-        var c = centroid(face);
-        var col = color.getCellColor(c.x, c.y, w, h);
-        App.fillPolygon(ctx, face, color.colorToHsl(col));
-      });
-
-      var lineThickness = 6 + Math.sin(Date.now() * 0.0001) * 1;
-      ctx.strokeStyle = '#1a1a1a';
-      ctx.lineWidth = lineThickness;
-      ctx.lineCap = 'round';
-
-      lines.forEach(function (line) {
-        var dx = Math.cos(line.angle);
-        var dy = Math.sin(line.angle);
-        var t = Math.max(w, h);
-        ctx.beginPath();
-        ctx.moveTo(line.px - dx * t, line.py - dy * t);
-        ctx.lineTo(line.px + dx * t, line.py + dy * t);
-        ctx.stroke();
-      });
-    }
-
-    return { init: init, update: update, render: render };
-  };
-})(window.App = window.App || {});
-
-/* ===== src/main.js ===== */
-// Entry point: wires the shared core to a chosen mode and runs the loop.
-// The build bakes in a specific mode per Wallpaper Engine wallpaper; each
-// build only bundles the sources for its own mode, so unused registry entries
-// below are simply never invoked.
-(function (App) {
-  var MODES = {
-    'stained-glass': {
-      background: '#0a0a0a',
-      create: function () {
-        var color = App.createColorEngine(App.palettes.stainedGlass);
-        return { color: color, mode: App.createStainedGlass({ color: color }) };
-      }
-    },
-    'art-nouveau': {
-      background: '#12100c',
-      create: function () {
-        var color = App.createColorEngine(App.palettes.artNouveau);
-        var motion = App.createMotion();
-        return {
-          color: color,
-          mode: App.createArtNouveau({ color: color, motion: motion, palette: App.palettes.artNouveau })
-        };
-      }
-    },
-    // Frozen snapshot of the Art Nouveau mode (see src/modes/art-nouveau-v1.js).
-    'art-nouveau-v1': {
-      background: '#12100c',
-      create: function () {
-        var color = App.createColorEngine(App.palettes.artNouveauV1);
-        var motion = App.createMotion();
-        return {
-          color: color,
-          mode: App.createArtNouveauV1({ color: color, motion: motion, palette: App.palettes.artNouveauV1 })
-        };
-      }
-    }
-  };
-
-  App.start = function (modeName) {
-    var def = MODES[modeName];
-    if (!def) throw new Error('Unknown mode: ' + modeName);
-
-    var view;
-    var settings = App.createSettings({ background: def.background }, function (s) {
-      if (view) view.setBackground(s.background);
-    });
-
-    view = App.createCanvas({ mount: '#root', background: settings.background });
-
-    var built = def.create();
-    var color = built.color, mode = built.mode;
-
-    mode.init(view.width, view.height);
-
-    App.createLoop(function (dt, t) {
-      var w = view.width, h = view.height;
-      mode.update(w, h, t, dt);
-      mode.render(view.ctx, w, h, { background: settings.background });
-      color.tick(w, h);
-    }).start();
-  };
-})(window.App = window.App || {});
-
-    App.start('stained-glass');
-  </script>
+  <div class="wrap">
+    <header>
+      <h1>Stained Motion<span class="dot">.</span></h1>
+      <p class="tagline">Generative, ever-shifting animated wallpapers. Each is a single self-contained page —
+        no framework, no network — that also installs as a Wallpaper Engine module. Colors drift slowly and
+        the composition never quite repeats.</p>
+    </header>
+
+    <h2>Wallpapers</h2>
+    <div class="grid">
+      <div class="card">
+        <a href="stained-glass.html"><img class="thumb" src="thumbs/stained-glass.png" alt="Stained Glass preview" loading="lazy"></a>
+        <div class="body">
+          <h3>Stained Glass</h3>
+          <p>Leaded lines drift across the canvas; the panes they form fill with slowly shifting harmonic color,
+            transitions smoothed so panes never flicker.</p>
+          <div class="actions">
+            <a class="btn primary" href="stained-glass.html">Open live ▸</a>
+            <a class="btn ghost" href="wallpaper-engine-stained-glass.zip" download>Wallpaper Engine (.zip)</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <a href="art-nouveau-organic.html"><img class="thumb" src="thumbs/art-nouveau-organic.png" alt="Art Nouveau — Organic preview" loading="lazy"></a>
+        <div class="body">
+          <h3>Art Nouveau — Organic</h3>
+          <p>Leafy, budding vines sprout in clusters from two haloed roundels whose gold sunbursts reach toward a
+            drifting meeting point, all over a muted mosaic field.</p>
+          <div class="actions">
+            <a class="btn primary" href="art-nouveau-organic.html">Open live ▸</a>
+            <a class="btn ghost" href="wallpaper-engine-art-nouveau-organic.zip" download>Wallpaper Engine (.zip)</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <a href="art-nouveau-sparse.html"><img class="thumb" src="thumbs/art-nouveau-sparse.png" alt="Art Nouveau — Sparse preview" loading="lazy"></a>
+        <div class="body">
+          <h3>Art Nouveau — Sparse</h3>
+          <p>The earlier, airier composition: gold-outlined vines splay from two concentric halos over a mosaic
+            field, with filigree scrolls and drifting motes.</p>
+          <div class="actions">
+            <a class="btn primary" href="art-nouveau-sparse.html">Open live ▸</a>
+            <a class="btn ghost" href="wallpaper-engine-art-nouveau-sparse.zip" download>Wallpaper Engine (.zip)</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <h2>Notes</h2>
+    <div class="notes">
+      <ul>
+        <li><strong>Live pages</strong> — open any "live" link and let it run full-screen. There are no controls; it's a screensaver. Thumbnails are single frames, so they can't show the slow motion.</li>
+        <li><strong>Wallpaper Engine</strong> — download a <code>.zip</code> and use Wallpaper Engine's <em>Open from file</em> to import it. Each exposes a Scheme Color (background) property.</li>
+        <li><strong>How it works</strong> — every piece shares one color engine (a slowly drifting root hue with harmony palettes that cross-fade), so colors evolve smoothly and never flicker between schemes.</li>
+        <li><strong>Two Art Nouveau variants</strong> — <em>Organic</em> is the current design (clustered vines, foliage, a meeting hub that fades in as the sunbursts converge); <em>Sparse</em> is a preserved earlier look, kept as its own wallpaper.</li>
+      </ul>
+    </div>
+
+    <footer>
+      Source &amp; build on <a href="https://github.com/pchadik/stainedmotion">GitHub</a>. Built with no dependencies; runs entirely offline.
+    </footer>
+  </div>
 </body>
 </html>

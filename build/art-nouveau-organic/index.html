@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Art Nouveau</title>
+  <title>Art Nouveau — Organic</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0a0a; }
@@ -344,7 +344,7 @@
 })(window.App = window.App || {});
 
 /* ===== src/modes/art-nouveau.js ===== */
-// Art Nouveau mode (working version). Layers, back to front:
+// Art Nouveau mode — public name "Organic" (v2). Layers, back to front:
 //   mosaic field  - low-contrast tessellation covering the whole canvas
 //   rays          - per-roundel sunburst whose length/weight peaks toward the
 //                   other roundel; the peak spike reaches a shared meeting hub
@@ -852,7 +852,8 @@
         return { color: color, mode: App.createStainedGlass({ color: color }) };
       }
     },
-    'art-nouveau': {
+    // Art Nouveau "Organic" (v2) — src/modes/art-nouveau.js.
+    'art-nouveau-organic': {
       background: '#12100c',
       create: function () {
         var color = App.createColorEngine(App.palettes.artNouveau);
@@ -863,8 +864,8 @@
         };
       }
     },
-    // Frozen snapshot of the Art Nouveau mode (see src/modes/art-nouveau-v1.js).
-    'art-nouveau-v1': {
+    // Art Nouveau "Sparse" (v1, frozen) — src/modes/art-nouveau-v1.js.
+    'art-nouveau-sparse': {
       background: '#12100c',
       create: function () {
         var color = App.createColorEngine(App.palettes.artNouveauV1);
@@ -902,7 +903,7 @@
   };
 })(window.App = window.App || {});
 
-    App.start('art-nouveau');
+    App.start('art-nouveau-organic');
   </script>
 </body>
 </html>

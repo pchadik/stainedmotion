@@ -11,7 +11,8 @@
         return { color: color, mode: App.createStainedGlass({ color: color }) };
       }
     },
-    'art-nouveau': {
+    // Art Nouveau "Organic" (v2) — src/modes/art-nouveau.js.
+    'art-nouveau-organic': {
       background: '#12100c',
       create: function () {
         var color = App.createColorEngine(App.palettes.artNouveau);
@@ -22,8 +23,8 @@
         };
       }
     },
-    // Frozen snapshot of the Art Nouveau mode (see src/modes/art-nouveau-v1.js).
-    'art-nouveau-v1': {
+    // Art Nouveau "Sparse" (v1, frozen) — src/modes/art-nouveau-v1.js.
+    'art-nouveau-sparse': {
       background: '#12100c',
       create: function () {
         var color = App.createColorEngine(App.palettes.artNouveauV1);

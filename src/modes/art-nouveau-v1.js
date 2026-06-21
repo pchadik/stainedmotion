@@ -1,8 +1,9 @@
-// Art Nouveau v1 — FROZEN SNAPSHOT. A preserved copy of the Art Nouveau mode
-// at this point in its evolution, kept stable while the working `art-nouveau`
-// mode continues to change. Do not edit for new features; tweak art-nouveau.js
-// instead. Layers, back to front: mosaic field, sunburst rays, roundels,
-// beads, spirals, vines (axis u), motes (axis p); global time-scale slows all.
+// Art Nouveau v1 — public name "Sparse". FROZEN SNAPSHOT, a preserved copy of
+// the Art Nouveau mode at this point in its evolution, kept stable while the
+// working "Organic" mode (art-nouveau.js) continues to change. Do not edit for
+// new features; tweak art-nouveau.js instead. Layers, back to front: mosaic
+// field, sunburst rays, roundels, beads, spirals, vines (axis u), motes
+// (axis p); global time-scale slows all.
 (function (App) {
   App.createArtNouveauV1 = function (deps) {
     var color = deps.color;

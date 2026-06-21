@@ -1,5 +1,6 @@
 {
   "file": "index.html",
+  "preview": "preview.png",
   "general": {
     "properties": {
       "schemecolor": {
@@ -10,7 +11,7 @@
       }
     }
   },
-  "title": "Art Nouveau",
+  "title": "Art Nouveau — Sparse",
   "type": "web",
   "version": 1,
   "visibility": "private",
@@ -18,5 +19,5 @@
     "Abstract",
     "Relaxing"
   ],
-  "description": "Flowing Art Nouveau ribbons in muted, gold-outlined harmonic color, undulating in place."
+  "description": "Art Nouveau: gold-outlined vines splay from two concentric halos over a mosaic field, with filigree scrolls and drifting motes. The earlier, airier composition."
 }
