@@ -61,6 +61,7 @@
         var baseX = (i + 0.5) / n * w + (Math.random() - 0.5) * spacing * 0.9;
         var dxc = Math.max(-1, Math.min(1, (baseX - w * 0.5) / (w * 0.5))); // -1 left .. +1 right
         var edge = Math.max(0, (Math.abs(dxc) - 0.25) / 0.75);            // 0 near path, 1 at edge
+        var centerF = 1 + 0.35 * (1 - Math.abs(dxc));                     // trees nearer centre thicker
         trees.push({
           x: baseX,
           z: z,
@@ -69,7 +70,7 @@
           amp: minDim * (0.004 + 0.013 * z),              // dance amplitude (near sways more)
           spd: (2 * Math.PI) / (4 + Math.random() * 6),   // dance speed
           phase: Math.random() * Math.PI * 2,
-          width: 0.8 + 2.6 * z,
+          width: (0.8 + 2.6 * z) * centerF,
           hueJ: (Math.random() - 0.5) * 16,
           seedY: Math.random(),
           // Tilt outward toward the screen edges (right leans right, left leans
@@ -79,7 +80,13 @@
           shimSpd: (2 * Math.PI) / (0.4 + Math.random() * 0.8),
           shimPh: Math.random() * Math.PI * 2,
           shimSpd2: (2 * Math.PI) / (0.25 + Math.random() * 0.5),
-          shimPh2: Math.random() * Math.PI * 2
+          shimPh2: Math.random() * Math.PI * 2,
+          // A vine that climbs and weaves up the trunk, bearing the odd leaf.
+          hasVine: Math.random() < 0.6,
+          vineH: 0.5 + Math.random() * 0.38,              // climbs 50-88% up the trunk
+          vineCoils: 2.5 + Math.random() * 3,
+          vineAmp: minDim * (0.004 + 0.005 * Math.random()),
+          vinePhase: Math.random() * Math.PI * 2
         });
       }
     }
@@ -124,6 +131,39 @@
       App.strokePolyline(ctx, [outP, ai ? b : a], style, width);
     }
 
+    // A vine climbing a trunk: weaves across the trunk as it rises, bearing the
+    // odd small leaf. Clipped to the visible region and faded toward the bottom.
+    function drawVine(ctx, tr, pts, t, ax, ay, w, h) {
+      if (!tr.hasVine) return;
+      var topIdx = Math.max(1, Math.round(TREE_SEGS * (1 - tr.vineH)));
+      var midY = h * (0.3 + tr.seedY * 0.4), c = color.getCellColor(tr.x, midY, w, h);
+      var vhue = c.h + (122 - c.h) * 0.6, vsat = Math.min(55, c.s * 1.2), vl = Math.min(46, c.l * 0.85);
+      var prev = null;
+      for (var s = TREE_SEGS; s >= topIdx; s--) {
+        var p = pts[s];
+        var pa = pts[Math.min(TREE_SEGS, s + 1)], pb = pts[Math.max(0, s - 1)];
+        var dx = pb.x - pa.x, dy = pb.y - pa.y, len = Math.hypot(dx, dy) || 1;
+        var perpx = -dy / len, perpy = dx / len;
+        var prog = (TREE_SEGS - s) / TREE_SEGS;
+        var wv = Math.sin(prog * tr.vineCoils * Math.PI * 2 + tr.vinePhase), off = tr.vineAmp * wv;
+        var vx = p.x + perpx * off, vy = p.y + perpy * off;
+        if (prev) {
+          var a = 0.85 * fadeLower((vy + prev.y) * 0.5 / h);
+          if (a > 0.02) {
+            var style = 'hsla(' + vhue + ', ' + vsat + '%, ' + vl + '%, ' + a.toFixed(3) + ')';
+            drawTreeSeg(ctx, prev, { x: vx, y: vy }, style, 1.3, ax, ay, w, h);
+            if (Math.abs(wv) > 0.82) {                    // a small leaf at the weave extremes
+              var lo = off >= 0 ? 1 : -1;
+              drawTreeSeg(ctx, { x: vx, y: vy },
+                { x: vx + perpx * lo * tr.vineAmp, y: vy + perpy * lo * tr.vineAmp - minDim * 0.007 },
+                style, 1.1, ax, ay, w, h);
+            }
+          }
+        }
+        prev = { x: vx, y: vy };
+      }
+    }
+
     // Back layer: the far trees, behind the ribbons. Fade out toward the bottom
     // and scintillate.
     function drawTreesBack(ctx, w, h, t, ax, ay) {
@@ -141,6 +181,7 @@
           if (a < 0.01) continue;
           drawTreeSeg(ctx, pts[s], pts[s + 1], 'hsla(' + hsl + ', ' + a.toFixed(3) + ')', tr.width, ax, ay, w, h);
         }
+        drawVine(ctx, tr, pts, t, ax, ay, w, h);
       }
     }
 
@@ -163,6 +204,7 @@
           if (a < 0.01) continue;
           drawTreeSeg(ctx, pts[s], pts[s + 1], 'hsla(' + hsl + ', ' + a.toFixed(3) + ')', width, ax, ay, w, h);
         }
+        drawVine(ctx, tr, pts, t, ax, ay, w, h);
       }
     }
 
@@ -196,19 +238,21 @@
       return pts;
     }
 
-    function ringMaxR(ay) { return Math.min(ay * 0.96, minDim * 0.62); }
+    function ringMaxR(ay) { return Math.min(ay * 0.96, minDim * 0.62) * (1 + breath * 0.012); }
+    function ringCx(ax, w) { return ax - breath * w * 0.01; } // rings drift less than the path
 
-    // True when (x,y) should be cleared of forest: in the funnel between the two
-    // ribbons (below the apex) OR inside the ring crown (the half-disc above the
-    // apex). Keeps vertical lines out from between the lines and inside the rings.
+    // True when (x,y) should be cleared of forest: inside the ring disc (the
+    // crown AND the area just below it, so no trees show below the rings/tapers),
+    // or in the funnel between the two ribbons.
     function hidden(x, y, ax, ay, w, h) {
+      var dx = x - ringCx(ax, w), dy = y - ay, R = ringMaxR(ay);
+      if (dx * dx + dy * dy < R * R) return true;
       if (y > ay) {
         var t = (y - ay) / (h * 1.06 - ay);
         if (t > 1) t = 1;
         return x > ribbonX(-1, t, ax, w) && x < ribbonX(1, t, ax, w);
       }
-      var dx = x - ax, dy = y - ay, R = ringMaxR(ay);
-      return dx * dx + dy * dy < R * R;
+      return false;
     }
 
     function ribbonWidth(t) {                             // thin (far apex) -> thicker (near)
@@ -252,34 +296,62 @@
       }
     }
 
-    // Three large gold-trimmed half-rings centred on the apex, flat (diameter)
-    // side level with it (upper semicircles). The curved part is a green band
-    // with gold trim, like the path; short gold pendant lines hang straight down
-    // — longest over the crown, vanishing at the flat ends.
+    // A single drippy, watery pendant: a tapering, gently wavering gold drop with
+    // a rounded bead at its tip. The phase + slow time give a watery undulation.
+    function drawDrip(ctx, px, py, len, style, phase) {
+      var segs = 8, cl = [], wob = minDim * 0.006, ph = phase + animTime * 0.0016;
+      for (var u = 0; u <= segs; u++) {
+        var f = u / segs;
+        cl.push({ x: px + wob * Math.sin(f * Math.PI * 2.2 + ph) * f, y: py + f * len });
+      }
+      var left = [], right = [];
+      for (var i = 0; i <= segs; i++) {
+        var f2 = i / segs, hw = (1.7 * (1 - f2) + 0.35) * 0.5; // taper to a fine tip
+        left.push({ x: cl[i].x - hw, y: cl[i].y });
+        right.push({ x: cl[i].x + hw, y: cl[i].y });
+      }
+      App.fillPolygon(ctx, left.concat(right.reverse()), style);
+      App.fillCircle(ctx, cl[segs].x, cl[segs].y, minDim * 0.0035, style); // the drop
+    }
+
+    // Three large gold-trimmed rings centred on the apex, the flat side level
+    // with it but with the ends EXTENDED below and TAPERED to points. The curved
+    // part is a green band with gold trim, like the path. Drippy watery pendants
+    // hang down and are drawn first so the rings sit in front of where they hang.
     function drawArcs(ctx, ax, ay, w, h) {
-      var GOLD = 'rgba(201, 170, 96, 0.7)';
-      var maxR = ringMaxR(ay);
+      var GOLD = 'rgba(201, 170, 96, 0.7)', GOLDF = 'rgba(201, 170, 96, 0.6)';
+      var cx = ringCx(ax, w), maxR = ringMaxR(ay);
       var radii = [maxR * 0.55, maxR * 0.77, maxR];
-      var segs = 56, nP = 13, bandHalf = minDim * 0.006;
-      var cc = color.getCellColor(ax, ay, w, h);
+      var segs = 64, nP = 15, bandHalf = minDim * 0.007;
+      var ext = 0.34, span = Math.PI + 2 * ext;           // extend the arc ends below the flat side
+      var cc = color.getCellColor(cx, ay, w, h);
       var green = 'hsl(' + (cc.h + (116 - cc.h) * 0.5) + ', ' + (cc.s * 0.9) + '%, ' + (cc.l * 0.55) + '%)';
+
+      // Pass 1: pendant drops, behind the rings.
       for (var r = 0; r < radii.length; r++) {
-        var R = radii[r], outer = [], inner = [];
+        var R0 = radii[r];
+        for (var p = 1; p < nP; p++) {
+          var f = p / nP, a2 = (Math.PI - ext) + span * f;
+          var px = cx + R0 * Math.cos(a2), py = ay + R0 * Math.sin(a2);
+          var hashv = Math.abs(Math.sin(p * 53.13 + r * 17.7));
+          var len = minDim * 0.06 * Math.pow(Math.sin(Math.PI * f), 0.8) * (0.6 + 0.6 * hashv);
+          if (len < 2) continue;
+          drawDrip(ctx, px, py, len, GOLDF, p * 1.7 + r);
+        }
+      }
+
+      // Pass 2: the rings — green band with gold trim, tapering at the ends.
+      for (var r2 = 0; r2 < radii.length; r2++) {
+        var R = radii[r2], outer = [], inner = [];
         for (var i = 0; i <= segs; i++) {
-          var a = Math.PI + Math.PI * (i / segs), ca = Math.cos(a), sa = Math.sin(a); // upper half
-          outer.push({ x: ax + (R + bandHalf) * ca, y: ay + (R + bandHalf) * sa });
-          inner.push({ x: ax + (R - bandHalf) * ca, y: ay + (R - bandHalf) * sa });
+          var ff = i / segs, a = (Math.PI - ext) + span * ff, ca = Math.cos(a), sa = Math.sin(a);
+          var hw = bandHalf * Math.min(1, Math.sin(Math.PI * ff) * 1.7); // full over the top, ->0 at ends
+          outer.push({ x: cx + (R + hw) * ca, y: ay + (R + hw) * sa });
+          inner.push({ x: cx + (R - hw) * ca, y: ay + (R - hw) * sa });
         }
-        App.fillPolygon(ctx, outer.concat(inner.slice().reverse()), green); // green band
-        App.strokePolyline(ctx, outer, GOLD, 1);          // gold trim on both curved edges
+        App.fillPolygon(ctx, outer.concat(inner.slice().reverse()), green);
+        App.strokePolyline(ctx, outer, GOLD, 1);
         App.strokePolyline(ctx, inner, GOLD, 1);
-        for (var p = 1; p < nP; p++) {                    // short gold pendant lines going down
-          var a2 = Math.PI + Math.PI * (p / nP);
-          var px = ax + R * Math.cos(a2), py = ay + R * Math.sin(a2);
-          var len = minDim * 0.045 * Math.pow(Math.sin(Math.PI * p / nP), 0.8);
-          if (len < 1) continue;
-          App.strokePolyline(ctx, [{ x: px, y: py }, { x: px, y: py + len }], GOLD, 1);
-        }
       }
     }
 
