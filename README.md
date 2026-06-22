@@ -14,9 +14,12 @@ and the compositions never quite repeat.
 | **Stained Glass** — leaded lines drift; the panes fill with shifting harmonic color | [open](https://pchadik.github.io/stainedmotion/stained-glass.html) | `wallpaper-engine-stained-glass.zip` |
 | **Art Nouveau — Organic** — leafy, budding vines sprout in clusters from haloed roundels whose sunbursts reach a drifting meeting point | [open](https://pchadik.github.io/stainedmotion/art-nouveau-organic.html) | `wallpaper-engine-art-nouveau-organic.zip` |
 | **Art Nouveau — Sparse** — the earlier, airier look: vines splay from concentric halos with filigree scrolls and motes | [open](https://pchadik.github.io/stainedmotion/art-nouveau-sparse.html) | `wallpaper-engine-art-nouveau-sparse.zip` |
+| **Heartwood** — a surreal forest: a winding path / twin trunks descend from a tapered, gold-dripping ring crown over a vined forest that fans to the edges | [open](https://pchadik.github.io/stainedmotion/heartwood.html) | `wallpaper-engine-heartwood.zip` |
 
 The two Art Nouveau variants are independent wallpapers: **Organic** is the
 current design; **Sparse** is a preserved earlier composition, frozen.
+**Heartwood** is a separate piece — a converging path/twin-trunk under a tapered
+ring crown, with a vined forest, in an earthy band of greens, golds and umbers.
 
 ## Structure
 
@@ -66,4 +69,6 @@ palettes (analogous, triadic, complementary, …) that cross-fade when they
 switch, and hue interpolated continuously across position so colors evolve
 smoothly and never flicker between schemes. The Art Nouveau modes add a
 three-axis motion system (undulation, rotation, particles), each axis drifting
-on its own incommensurate cycle so the scene keeps recomposing.
+on its own incommensurate cycle so the scene keeps recomposing. Heartwood
+constrains that drift to an earthy band (an opt-in hue range on the color
+engine) and adds its own slow shared breathing and per-element shimmer.
