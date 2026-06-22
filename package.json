@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "build": "node build.mjs",
-    "test": "node build.mjs && node test/motion.test.mjs && node test/smoke.test.mjs stained-glass && node test/smoke.test.mjs art-nouveau-sparse && node test/smoke.test.mjs art-nouveau-organic",
+    "test": "node build.mjs && node test/motion.test.mjs && node test/smoke.test.mjs stained-glass && node test/smoke.test.mjs art-nouveau-sparse && node test/smoke.test.mjs art-nouveau-organic && node test/smoke.test.mjs heartwood",
     "preview": "node build.mjs && node tools/preview.mjs",
     "package": "node package.mjs"
   }

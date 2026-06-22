@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Stained Glass</title>
+  <title>Heartwood</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0a0a; }
@@ -326,296 +326,254 @@
   };
 })(window.App = window.App || {});
 
-/* ===== src/palettes/stained-glass.js ===== */
-// Saturated stained-glass palette. These constants reproduce the original
-// look exactly; a future Art Nouveau palette supplies its own muted values.
+/* ===== src/palettes/heartwood.js ===== */
+// Heartwood palette: earthy harmonic color — forest greens reaching into olive,
+// moss, gold, amber and umber. Unlike the Art Nouveau palette (which keeps the
+// full hue wheel), this one constrains the drifting root hue to an earth band
+// via `hueRange`, so the scene stays in greens/golds/browns while still moving.
+// Lower lightness than the Art Nouveau modes for a deep, woodland feel.
 (function (App) {
   App.palettes = App.palettes || {};
-  App.palettes.stainedGlass = {
+  App.palettes.heartwood = {
     harmonies: {
-      analogous: [0, 30, -30, 15, -15],
-      triadic: [0, 120, 240],
-      splitComplementary: [0, 150, 210],
-      tetradic: [0, 90, 180, 270],
-      complementary: [0, 180, 30, 210]
+      // All offsets kept small so root-hue + offset never leaves the earth band.
+      forest:    [0, -15, 12, -28],   // green core, olive + gold neighbours
+      mossGold:  [0, -25, -40, 14],   // green -> amber -> sienna
+      barkUmber: [0, 18, -30, 8]      // green <-> umber/brown
     },
-    satBase: 35, satAmp: 10,
-    lightBase: 38, lightAmp: 8,
-    blendFreqX: 2, blendFreqY: 3,
-    satFreqX: 1.5, satFreqY: 1,
-    lightFreqX: 1, lightFreqY: 1.7,
+    satBase: 34, satAmp: 12,
+    lightBase: 40, lightAmp: 12,
+    blendFreqX: 1.2, blendFreqY: 1.8,
+    satFreqX: 1.0, satFreqY: 0.7,
+    lightFreqX: 0.8, lightFreqY: 1.2,
     hueDrift: 0.003,
-    harmonySwitchProb: 0.00005,
-    crossfadeStep: 0.01
+    harmonySwitchProb: 0.00003,
+    crossfadeStep: 0.006,
+    // Keep the root hue ping-ponging in the yellow-green..green range; the small
+    // harmony offsets above carry it down into amber/umber without leaving earth.
+    hueRange: { min: 65, max: 115 },
+    // Earthy bronze contour — the nouveau cloisonné line, woodland-tinted.
+    outline: '#8a7a45',
+    outlineWidth: 1.4
   };
 })(window.App = window.App || {});
 
-/* ===== src/modes/stained-glass.js ===== */
-// Stained-glass mode: straight infinite lines drift across the canvas; the
-// planar subdivision they form is extracted into faces, each filled with a
-// harmonic color and separated by dark "leading".
+/* ===== src/modes/heartwood.js ===== */
+// Heartwood mode — public name "Heartwood". A surreal Art Nouveau forest.
+//
+// Two wavy ribbons descend from a shared point high on the canvas: near each
+// other at the top and splaying wide at the bottom — at once a PATH converging
+// to a far destination and two great TRUNKS. They breathe and sway in sync.
+// Behind them a field of restless vertical "trees" dances. Earthy harmonic
+// color throughout (greens, golds, umbers).
+//
+// Layers, back to front:
+//   ground      - flat dark backdrop (env.background)
+//   forest      - swaying vertical tree-lines, faded by depth
+//   apex glow   - soft warm breathing light at the shared convergence point
+//   ribbons     - the two converging trunks/paths: segmented earthy-green fill
+//                 with a nouveau contour; breathe + sway in sync
+//   (future overlays: canopy at the top, root flare + leaf litter at the bottom)
 (function (App) {
-  App.createStainedGlass = function (deps) {
+  App.createHeartwood = function (deps) {
     var color = deps.color;
-    var lines = [];
+    var motion = deps.motion;
+    var palette = deps.palette || {};
+    var outline = palette.outline || '#8a7a45';
+    var outlineWidth = palette.outlineWidth || 1.4;
 
-    function init(w, h) {
-      lines = [];
+    var GLOBAL_SPEED = 0.7; // uniform slow-down of the whole piece
 
-      var numHorizontal = 3 + Math.floor(Math.random() * 4);
-      var hSpacing = h / (numHorizontal + 1);
-      for (var i = 0; i < numHorizontal; i++) {
-        lines.push({
-          px: w / 2,
-          py: hSpacing * (i + 1) + (Math.random() - 0.5) * hSpacing * 0.5,
-          angle: (Math.random() - 0.5) * Math.PI * 0.5,
-          velocity: (Math.random() - 0.5) * 0.08,
-          angleVelocity: (Math.random() - 0.5) * 0.00008,
-          isHorizontal: true
-        });
-      }
+    var W = 1, H = 1, minDim = 1, builtW = 0, builtH = 0;
+    var animTime = 0, wavePhase = 0, breath = 0;
 
-      var numVertical = 5 + Math.floor(Math.random() * 5);
-      var vSpacing = w / (numVertical + 1);
-      for (var j = 0; j < numVertical; j++) {
-        lines.push({
-          px: vSpacing * (j + 1) + (Math.random() - 0.5) * vSpacing * 0.5,
-          py: h / 2,
-          angle: Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 0.5,
-          velocity: (Math.random() - 0.5) * 0.1,
-          angleVelocity: (Math.random() - 0.5) * 0.00008,
-          isHorizontal: false
+    // Breathing: two incommensurate sines so the rhythm never quite repeats.
+    // Both ribbons read this same value, so they move in sympathy.
+    var BO1 = Math.random() * Math.PI * 2, BO2 = Math.random() * Math.PI * 2;
+    function breathAt(ts) {
+      return 0.62 * Math.sin(ts * (2 * Math.PI / 11) + BO1) +
+             0.38 * Math.sin(ts * (2 * Math.PI / 6.5) + BO2);
+    }
+
+    // ---- forest of vertical tree-lines ----
+    var trees = [];
+    function buildTrees(w, h) {
+      trees = [];
+      var spacing = minDim * 0.024;
+      var n = Math.max(24, Math.round(w / spacing));
+      for (var i = 0; i < n; i++) {
+        var z = Math.random();                            // depth: 0 far, 1 near
+        var baseX = (i + 0.5) / n * w + (Math.random() - 0.5) * spacing * 0.9;
+        trees.push({
+          x: baseX,
+          z: z,
+          lean: (Math.random() - 0.5) * minDim * 0.03,    // static lean over height
+          wob: (Math.random() - 0.5) * minDim * 0.024,    // static mid-height waviness
+          wobF: 1.0 + Math.random() * 1.5,
+          amp: minDim * (0.004 + 0.013 * z),              // dance amplitude (near sways more)
+          spd: (2 * Math.PI) / (4 + Math.random() * 6),   // dance speed
+          phase: Math.random() * Math.PI * 2,
+          width: 0.8 + 2.6 * z,
+          hueJ: (Math.random() - 0.5) * 16,
+          seedY: Math.random()
         });
       }
     }
 
-    function update(w, h) {
-      lines.forEach(function (line) {
-        if (line.isHorizontal) {
-          line.py += line.velocity;
-          if (line.py < 50 || line.py > h - 50) {
-            line.velocity *= -1;
-            line.py = Math.max(50, Math.min(h - 50, line.py));
-          }
-        } else {
-          line.px += line.velocity;
-          if (line.px < 50 || line.px > w - 50) {
-            line.velocity *= -1;
-            line.px = Math.max(50, Math.min(w - 50, line.px));
-          }
-        }
+    var TREE_SEGS = 10;
+    var FRONT_Z = 0.62; // trees nearer than this are foreground (drawn over the ribbons)
 
-        line.angle += line.angleVelocity;
-
-        var baseAngle = line.isHorizontal ? 0 : Math.PI / 2;
-        var angleDiff = line.angle - baseAngle;
-        if (Math.abs(angleDiff) > Math.PI * 0.33) {
-          line.angleVelocity *= -1;
-        }
-
-        if (Math.random() < 0.002) {
-          line.velocity += (Math.random() - 0.5) * 0.02;
-          var maxV = line.isHorizontal ? 0.15 : 0.18;
-          line.velocity = Math.max(-maxV, Math.min(maxV, line.velocity));
-        }
-      });
+    function treePoints(tr, w, h, t) {
+      var dance = Math.sin(t * tr.spd + tr.phase);
+      var pts = [];
+      for (var s = 0; s <= TREE_SEGS; s++) {
+        var yN = s / TREE_SEGS;                          // 0 top, 1 bottom
+        var y = -h * 0.06 + yN * (h * 1.12);
+        var crown = Math.pow(1 - yN, 1.2);               // tops sway more, roots anchored
+        var statics = tr.lean * (1 - yN) + tr.wob * Math.sin(yN * Math.PI * tr.wobF);
+        var x = tr.x + statics + tr.amp * dance * (0.25 + 0.85 * crown);
+        pts.push({ x: x, y: y });
+      }
+      return pts;
     }
 
-    var lineIntersection = function (line1, line2) {
-      var dx1 = Math.cos(line1.angle);
-      var dy1 = Math.sin(line1.angle);
-      var dx2 = Math.cos(line2.angle);
-      var dy2 = Math.sin(line2.angle);
-
-      var cross = dx1 * dy2 - dy1 * dx2;
-      if (Math.abs(cross) < 1e-10) return null;
-
-      var dpx = line2.px - line1.px;
-      var dpy = line2.py - line1.py;
-      var t = (dpx * dy2 - dpy * dx2) / cross;
-
-      return { x: line1.px + dx1 * t, y: line1.py + dy1 * t };
-    };
-
-    var centroid = function (vertices) {
-      var cx = 0, cy = 0;
-      vertices.forEach(function (v) { cx += v.x; cy += v.y; });
-      return { x: cx / vertices.length, y: cy / vertices.length };
-    };
-
-    var signedArea = function (vertices) {
-      var area = 0;
-      for (var i = 0; i < vertices.length; i++) {
-        var j = (i + 1) % vertices.length;
-        area += vertices[i].x * vertices[j].y;
-        area -= vertices[j].x * vertices[i].y;
+    // Back layer: the far trees, drawn behind the ribbons as a faded backdrop.
+    function drawTreesBack(ctx, w, h, t) {
+      for (var i = 0; i < trees.length; i++) {
+        var tr = trees[i];
+        if (tr.z > FRONT_Z) continue;
+        var pts = treePoints(tr, w, h, t);
+        var midY = h * (0.3 + tr.seedY * 0.4);
+        var c = color.getCellColor(tr.x, midY, w, h);
+        var l = Math.min(44, c.l * (0.45 + 0.28 * tr.z)); // capped so none read near-white
+        var alpha = 0.22 + 0.30 * tr.z;
+        App.strokePolyline(ctx, pts,
+          'hsla(' + (c.h + tr.hueJ) + ', ' + Math.min(52, c.s * 1.1) + '%, ' + l + '%, ' + alpha.toFixed(3) + ')',
+          tr.width);
       }
-      return area / 2;
-    };
+    }
 
-    var extractFaces = function (lines, w, h) {
-      var margin = 50;
-      var allLines = [
-        { px: -margin, py: 0, angle: Math.PI / 2 },
-        { px: w + margin, py: 0, angle: Math.PI / 2 },
-        { px: 0, py: -margin, angle: 0 },
-        { px: 0, py: h + margin, angle: 0 }
-      ].concat(lines);
-
-      var vertices = [];
-      var vertexMap = new Map();
-
-      var addVertex = function (x, y) {
-        var key = Math.round(x) + ',' + Math.round(y);
-        if (vertexMap.has(key)) return vertexMap.get(key);
-        var idx = vertices.length;
-        vertices.push({ x: x, y: y, edges: [] });
-        vertexMap.set(key, idx);
-        return idx;
-      };
-
-      var vertexLines = new Map();
-
-      for (var i = 0; i < allLines.length; i++) {
-        for (var j = i + 1; j < allLines.length; j++) {
-          var pt = lineIntersection(allLines[i], allLines[j]);
-          if (pt && pt.x >= -margin - 1 && pt.x <= w + margin + 1 &&
-              pt.y >= -margin - 1 && pt.y <= h + margin + 1) {
-            var vIdx = addVertex(pt.x, pt.y);
-            if (!vertexLines.has(vIdx)) vertexLines.set(vIdx, new Set());
-            vertexLines.get(vIdx).add(i);
-            vertexLines.get(vIdx).add(j);
-          }
+    // Front layer: the nearest trees, drawn OVER the ribbons. Darker silhouettes,
+    // strongest near the bottom (the foreground) and fading upward, so the path
+    // appears to run between and behind them.
+    function drawTreesFront(ctx, w, h, t) {
+      for (var i = 0; i < trees.length; i++) {
+        var tr = trees[i];
+        if (tr.z <= FRONT_Z) continue;
+        var pts = treePoints(tr, w, h, t);
+        var midY = h * (0.3 + tr.seedY * 0.4);
+        var c = color.getCellColor(tr.x, midY, w, h);
+        var l = Math.min(38, c.l * 0.42);                 // darker, silhouette-like
+        var hue = c.h + tr.hueJ, sat = Math.min(50, c.s * 1.05), width = tr.width * 1.5;
+        for (var s = 0; s < TREE_SEGS; s++) {
+          var yN = (s + 0.5) / TREE_SEGS;
+          var ramp = 0.20 + 0.80 * Math.pow(yN, 1.4);     // strongest at the bottom
+          var alpha = (0.32 + 0.45 * tr.z) * ramp;
+          App.strokePolyline(ctx, [pts[s], pts[s + 1]],
+            'hsla(' + hue + ', ' + sat + '%, ' + l + '%, ' + alpha.toFixed(3) + ')', width);
         }
       }
+    }
 
-      var edges = [];
-      var edgeMap = new Map();
+    // ---- the two converging ribbons ----
+    var RPTS = 64;
+    var apexFrac = { x: 0.5, y: 0.05 }; // shared destination, high on the canvas
 
-      var addEdge = function (v1, v2) {
-        if (v1 === v2) return -1;
-        var key = v1 < v2 ? v1 + ',' + v2 : v2 + ',' + v1;
-        if (edgeMap.has(key)) return edgeMap.get(key);
-        var idx = edges.length;
-        edges.push({ v1: v1, v2: v2 });
-        edgeMap.set(key, idx);
-        vertices[v1].edges.push(idx);
-        vertices[v2].edges.push(idx);
-        return idx;
-      };
-
-      for (var lineIdx = 0; lineIdx < allLines.length; lineIdx++) {
-        var line = allLines[lineIdx];
-        var dx = Math.cos(line.angle);
-        var dy = Math.sin(line.angle);
-
-        var onLine = [];
-        vertices.forEach(function (v, vIdx) {
-          if (vertexLines.has(vIdx) && vertexLines.get(vIdx).has(lineIdx)) {
-            var t = (v.x - line.px) * dx + (v.y - line.py) * dy;
-            onLine.push({ idx: vIdx, t: t });
-          }
-        });
-
-        onLine.sort(function (a, b) { return a.t - b.t; });
-
-        for (var k = 0; k < onLine.length - 1; k++) {
-          addEdge(onLine[k].idx, onLine[k + 1].idx);
-        }
+    function ribbonCenter(side, w, h, ax, ay) {
+      var topHalf = w * 0.012;                            // near each other at the top
+      var botHalf = w * 0.205 * (1 + breath * 0.06);      // wide at the bottom, gap breathes
+      var swayMax = w * 0.055, waveAmp = w * 0.02;
+      var pts = [];
+      for (var i = 0; i < RPTS; i++) {
+        var t = i / (RPTS - 1);
+        var y = ay + (h * 1.06 - ay) * t;                 // apex -> just past the bottom
+        var widen = Math.pow(t, 1.25);                    // splay accelerates downward
+        var halfGap = topHalf + (botHalf - topHalf) * widen;
+        var damp = Math.sin(Math.PI * t);                 // anchored at apex & roots
+        var sway = swayMax * breath * damp;               // shared -> both lean together
+        var wave = waveAmp * Math.sin(t * 1.6 * Math.PI * 2 + wavePhase) * damp;
+        pts.push({ x: ax + side * halfGap + sway + wave, y: y, t: t });
       }
+      return pts;
+    }
 
-      vertices.forEach(function (v, vIdx) {
-        v.edges.sort(function (e1, e2) {
-          var edge1 = edges[e1];
-          var edge2 = edges[e2];
-          var other1 = edge1.v1 === vIdx ? edge1.v2 : edge1.v1;
-          var other2 = edge2.v1 === vIdx ? edge2.v2 : edge2.v1;
-          var angle1 = Math.atan2(vertices[other1].y - v.y, vertices[other1].x - v.x);
-          var angle2 = Math.atan2(vertices[other2].y - v.y, vertices[other2].x - v.x);
-          return angle1 - angle2;
-        });
-      });
+    function ribbonWidth(t) {                             // thin (far apex) -> thick (near)
+      var top = minDim * 0.0035, bot = minDim * 0.021;
+      return top + (bot - top) * Math.pow(t, 0.8);
+    }
 
-      var faces = [];
-      var usedHalfEdges = new Set();
-      var getHalfEdgeKey = function (edgeIdx, fromVertex) { return edgeIdx + ',' + fromVertex; };
-
-      for (var startVIdx = 0; startVIdx < vertices.length; startVIdx++) {
-        var startVertex = vertices[startVIdx];
-
-        for (var ei = 0; ei < startVertex.edges.length; ei++) {
-          var startEdgeIdx = startVertex.edges[ei];
-          var startKey = getHalfEdgeKey(startEdgeIdx, startVIdx);
-          if (usedHalfEdges.has(startKey)) continue;
-
-          var faceVertices = [];
-          var currentV = startVIdx;
-          var currentE = startEdgeIdx;
-          var safety = 0;
-
-          while (safety < 100) {
-            safety++;
-            var key = getHalfEdgeKey(currentE, currentV);
-            if (usedHalfEdges.has(key)) break;
-            usedHalfEdges.add(key);
-
-            var edge = edges[currentE];
-            var nextV = edge.v1 === currentV ? edge.v2 : edge.v1;
-            faceVertices.push({ x: vertices[nextV].x, y: vertices[nextV].y });
-
-            var nextVertex = vertices[nextV];
-            if (nextVertex.edges.length < 2) break;
-
-            var currentEdgePos = nextVertex.edges.indexOf(currentE);
-            if (currentEdgePos === -1) break;
-
-            var nextEdgePos = (currentEdgePos + nextVertex.edges.length - 1) % nextVertex.edges.length;
-            var nextE = nextVertex.edges[nextEdgePos];
-
-            currentV = nextV;
-            currentE = nextE;
-
-            if (currentV === startVIdx && currentE === startEdgeIdx) break;
-          }
-
-          if (faceVertices.length >= 3) {
-            var area = signedArea(faceVertices);
-            var maxArea = (w + 2 * margin) * (h + 2 * margin) * 0.8;
-            if (Math.abs(area) > 10 && Math.abs(area) < maxArea) {
-              if (area < 0) faceVertices.reverse();
-              faces.push(faceVertices);
-            }
-          }
-        }
+    function drawRibbon(ctx, center, w, h) {
+      var n = center.length, left = [], right = [];
+      for (var i = 0; i < n; i++) {
+        var p = center[i];
+        var a = center[Math.max(0, i - 1)], b = center[Math.min(n - 1, i + 1)];
+        var dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy) || 1;
+        var nx = -dy / len, ny = dx / len, hw = ribbonWidth(p.t) * 0.5;
+        left.push({ x: p.x + nx * hw, y: p.y + ny * hw });
+        right.push({ x: p.x - nx * hw, y: p.y - ny * hw });
       }
+      // Segmented fill: each quad takes its local earthy color pulled toward
+      // forest green and darkened, so the trunk's color flows far -> near.
+      for (i = 0; i < n - 1; i++) {
+        var mx = (center[i].x + center[i + 1].x) * 0.5, my = (center[i].y + center[i + 1].y) * 0.5;
+        var c = color.getCellColor(mx, my, w, h);
+        var hue = c.h + (116 - c.h) * 0.5;                // pull halfway to forest green
+        var quad = [left[i], left[i + 1], right[i + 1], right[i]];
+        App.fillPolygon(ctx, quad, 'hsl(' + hue + ', ' + (c.s * 0.95) + '%, ' + (c.l * 0.5) + '%)');
+      }
+      App.strokePolyline(ctx, left, outline, outlineWidth);
+      App.strokePolyline(ctx, right, outline, outlineWidth);
+    }
 
-      return faces;
-    };
+    // ---- apex glow (the shared destination / light through the canopy) ----
+    function drawGlow(ctx, ax, ay, w, h) {
+      var c = color.getCellColor(ax, ay, w, h);
+      var gh = c.h + (50 - c.h) * 0.4;                    // warm it toward gold
+      var pulse = 0.5 + 0.5 * breath;
+      var R = minDim * (0.10 + 0.03 * pulse);
+      var rings = 5;
+      for (var i = rings; i >= 1; i--) {
+        var f = i / rings;
+        var alpha = (0.10 * (1 - f) + 0.02) * (0.6 + 0.4 * pulse);
+        App.fillCircle(ctx, ax, ay, R * f,
+          'hsla(' + gh + ', ' + (c.s * 0.7) + '%, ' + Math.min(82, c.l * 1.7) + '%, ' + alpha.toFixed(3) + ')');
+      }
+    }
+
+    // ---- lifecycle ----
+    function rebuild(w, h) {
+      W = w; H = h; minDim = Math.min(w, h);
+      buildTrees(w, h);
+      builtW = w; builtH = h;
+    }
+    function init(w, h) { rebuild(w, h); }
+
+    function update(w, h, t, dt) {
+      if (Math.abs(w - builtW) > 2 || Math.abs(h - builtH) > 2) rebuild(w, h);
+      var effDt = dt * GLOBAL_SPEED;
+      animTime += effDt;
+      var ts = animTime / 1000;
+      var m = motion.sample(animTime);
+      breath = breathAt(ts);
+      wavePhase += (effDt / 1000) * (0.10 + 0.25 * m.u); // slow travelling wander
+      color.tick(w, h);
+    }
 
     function render(ctx, w, h, env) {
       App.clear(ctx, w, h, env.background);
+      W = w; H = h; minDim = Math.min(w, h);
+      var t = animTime / 1000;
 
-      var faces = extractFaces(lines, w, h);
-      faces.forEach(function (face) {
-        var c = centroid(face);
-        var col = color.getCellColor(c.x, c.y, w, h);
-        App.fillPolygon(ctx, face, color.colorToHsl(col));
-      });
+      drawTreesBack(ctx, w, h, t);
 
-      var lineThickness = 6 + Math.sin(Date.now() * 0.0001) * 1;
-      ctx.strokeStyle = '#1a1a1a';
-      ctx.lineWidth = lineThickness;
-      ctx.lineCap = 'round';
+      var ax = w * apexFrac.x + breath * w * 0.02;        // destination drifts a touch
+      var ay = h * apexFrac.y;
+      drawGlow(ctx, ax, ay, w, h);
 
-      lines.forEach(function (line) {
-        var dx = Math.cos(line.angle);
-        var dy = Math.sin(line.angle);
-        var t = Math.max(w, h);
-        ctx.beginPath();
-        ctx.moveTo(line.px - dx * t, line.py - dy * t);
-        ctx.lineTo(line.px + dx * t, line.py + dy * t);
-        ctx.stroke();
-      });
+      drawRibbon(ctx, ribbonCenter(-1, w, h, ax, ay), w, h);
+      drawRibbon(ctx, ribbonCenter(1, w, h, ax, ay), w, h);
+
+      drawTreesFront(ctx, w, h, t);                        // nearest trees in front, near the bottom
     }
 
     return { init: init, update: update, render: render };
@@ -699,7 +657,7 @@
   };
 })(window.App = window.App || {});
 
-    App.start('stained-glass');
+    App.start('heartwood');
   </script>
 </body>
 </html>

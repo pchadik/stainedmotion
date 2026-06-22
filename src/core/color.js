@@ -7,7 +7,13 @@
     var p = palette;
     var harmonyNames = Object.keys(p.harmonies);
 
-    var rootHue = Math.random() * 360;
+    // Optional themed band (e.g. earthy modes): keep the drifting root hue
+    // within [hueRange.min, hueRange.max] by ping-ponging rather than cycling
+    // the whole wheel. Omit hueRange for the original full-spectrum drift.
+    var rootHue = p.hueRange
+      ? p.hueRange.min + Math.random() * (p.hueRange.max - p.hueRange.min)
+      : Math.random() * 360;
+    var hueDir = 1;
     var harmonyType = 0;
     var prevHarmony = 0;
     var harmonyMix = 1; // 1 = fully on current harmony, <1 = mid cross-fade
@@ -57,7 +63,13 @@
 
     // Advance the slow hue drift and any in-progress harmony cross-fade.
     function tick() {
-      rootHue = (rootHue + p.hueDrift) % 360;
+      if (p.hueRange) {
+        rootHue += p.hueDrift * hueDir;
+        if (rootHue >= p.hueRange.max) { rootHue = p.hueRange.max; hueDir = -1; }
+        else if (rootHue <= p.hueRange.min) { rootHue = p.hueRange.min; hueDir = 1; }
+      } else {
+        rootHue = (rootHue + p.hueDrift) % 360;
+      }
       if (harmonyMix < 1) {
         harmonyMix = Math.min(1, harmonyMix + p.crossfadeStep);
       } else if (Math.random() < p.harmonySwitchProb) {

@@ -50,6 +50,15 @@ const MODES = {
     sources: ['src/palettes/art-nouveau.js', 'src/modes/art-nouveau.js'],
     bootstrap: "App.start('art-nouveau-organic');",
     rootFiles: ['art-nouveau-organic.html']
+  },
+  // Heartwood — surreal Art Nouveau forest with two converging ribbons.
+  'heartwood': {
+    title: 'Heartwood',
+    description: 'A surreal Art Nouveau forest: two wavy ribbons descend from a shared glowing point high on the canvas — at once a path converging to a far destination and two great trunks — breathing and swaying in sync over a field of dancing trees, in earthy harmonic color.',
+    tags: ['Abstract', 'Relaxing', 'Nature'],
+    sources: ['src/palettes/heartwood.js', 'src/modes/heartwood.js'],
+    bootstrap: "App.start('heartwood');",
+    rootFiles: ['heartwood.html']
   }
 };
 

@@ -34,6 +34,18 @@
           mode: App.createArtNouveauV1({ color: color, motion: motion, palette: App.palettes.artNouveauV1 })
         };
       }
+    },
+    // Heartwood — two converging ribbons (path/trunks) over a dancing forest.
+    'heartwood': {
+      background: '#25272b',
+      create: function () {
+        var color = App.createColorEngine(App.palettes.heartwood);
+        var motion = App.createMotion();
+        return {
+          color: color,
+          mode: App.createHeartwood({ color: color, motion: motion, palette: App.palettes.heartwood })
+        };
+      }
     }
   };
 
