@@ -445,11 +445,13 @@
           shimSpd2: (2 * Math.PI) / (0.25 + Math.random() * 0.5),
           shimPh2: Math.random() * Math.PI * 2,
           // A vine that climbs and weaves up the trunk, bearing the odd leaf.
-          hasVine: Math.random() < 0.6,
-          vineH: 0.5 + Math.random() * 0.38,              // climbs 50-88% up the trunk
+          // Faint, phasing slowly in and out, with its own shimmer cadence.
+          hasVine: Math.random() < 0.85,
+          vineH: 0.5 + Math.random() * 0.4,               // climbs 50-90% up the trunk
           vineCoils: 2.5 + Math.random() * 3,
           vineAmp: minDim * (0.004 + 0.005 * Math.random()),
-          vinePhase: Math.random() * Math.PI * 2
+          vinePhase: Math.random() * Math.PI * 2,
+          vinePhaseSpeed: (2 * Math.PI) / (8 + Math.random() * 8) // 8-16s phase in/out
         });
       }
     }
@@ -501,6 +503,10 @@
       var topIdx = Math.max(1, Math.round(TREE_SEGS * (1 - tr.vineH)));
       var midY = h * (0.3 + tr.seedY * 0.4), c = color.getCellColor(tr.x, midY, w, h);
       var vhue = c.h + (122 - c.h) * 0.6, vsat = Math.min(55, c.s * 1.2), vl = Math.min(46, c.l * 0.85);
+      // Faint; phases slowly in and out; shimmer on a different cadence from the
+      // trees (related — same base shimmer speed, scaled).
+      var inout = 0.1 + 0.9 * (0.5 + 0.5 * Math.sin(t * tr.vinePhaseSpeed + tr.vinePhase));
+      var vmul = 0.5 * inout * (0.6 + 0.4 * Math.sin(t * tr.shimSpd * 1.7 + tr.shimPh2));
       var prev = null;
       for (var s = TREE_SEGS; s >= topIdx; s--) {
         var p = pts[s];
@@ -511,7 +517,7 @@
         var wv = Math.sin(prog * tr.vineCoils * Math.PI * 2 + tr.vinePhase), off = tr.vineAmp * wv;
         var vx = p.x + perpx * off, vy = p.y + perpy * off;
         if (prev) {
-          var a = 0.85 * fadeLower((vy + prev.y) * 0.5 / h);
+          var a = vmul * fadeLower((vy + prev.y) * 0.5 / h);
           if (a > 0.02) {
             var style = 'hsla(' + vhue + ', ' + vsat + '%, ' + vl + '%, ' + a.toFixed(3) + ')';
             drawTreeSeg(ctx, prev, { x: vx, y: vy }, style, 1.3, ax, ay, w, h);
@@ -718,67 +724,65 @@
       }
     }
 
-    // ---- roots: an undulating root flare from each trunk base, spreading down
-    // and outward off the bottom of the frame. Drawn behind the ribbons and kept
-    // a margin clear of the path wherever they would cross it. ----
+    // ---- roots: each tree puts out roots near the ground line, spreading
+    // roughly horizontally (and dipping), so together they read as a low band of
+    // roots attached to the trunks. Undulating; kept clear of the path + rings. ----
     function nearPath(x, y, ax, ay, w, h, margin) {
       if (y < ay || y > h * 1.06) return false;
       var t = (y - ay) / (h * 1.06 - ay);
       var half = ribbonWidth(t) * 0.5 + margin;
       return Math.abs(x - ribbonX(-1, t, ax, w)) < half || Math.abs(x - ribbonX(1, t, ax, w)) < half;
     }
+    function rootCleared(x, y, ax, ay, w, h, margin) {   // no roots where trees are hidden or near the path
+      return hidden(x, y, ax, ay, w, h) || nearPath(x, y, ax, ay, w, h, margin);
+    }
 
-    // Draw only the part of a root segment that keeps clear of the path margin.
+    // Draw only the part of a root segment that survives the clear test; bisect
+    // to clip cleanly at the boundary.
     function drawRootSeg(ctx, a, b, style, width, ax, ay, w, h, margin) {
-      var ai = nearPath(a.x, a.y, ax, ay, w, h, margin);
-      var bi = nearPath(b.x, b.y, ax, ay, w, h, margin);
+      var ai = rootCleared(a.x, a.y, ax, ay, w, h, margin);
+      var bi = rootCleared(b.x, b.y, ax, ay, w, h, margin);
       if (ai && bi) return;
       if (!ai && !bi) { App.strokePolyline(ctx, [a, b], style, width); return; }
       var inP = ai ? a : b, outP = ai ? b : a;
       for (var k = 0; k < 12; k++) {
         var mx = (inP.x + outP.x) * 0.5, my = (inP.y + outP.y) * 0.5;
-        if (nearPath(mx, my, ax, ay, w, h, margin)) { inP = { x: mx, y: my }; }
+        if (rootCleared(mx, my, ax, ay, w, h, margin)) { inP = { x: mx, y: my }; }
         else { outP = { x: mx, y: my }; }
       }
       App.strokePolyline(ctx, [outP, ai ? b : a], style, width);
     }
 
-    var ROOT_SEGS = 18;
-    function growRoot(ctx, sx, sy, ang0, seed, t, ax, ay, w, h, baseWidth) {
-      var len = minDim * (0.16 + 0.08 * ((seed * 13) % 7) / 7);
-      var step = len / ROOT_SEGS, margin = minDim * 0.01;
-      var x = sx, y = sy, prev = { x: x, y: y };
-      var coil = 0.14 + 0.12 * ((seed * 7) % 5) / 5, ph = seed * 1.7;
-      var c = color.getCellColor(sx, Math.min(h, sy), w, h);
-      var rhue = c.h + (30 - c.h) * 0.72;                  // pull strongly toward umber/sienna
-      var rsat = Math.min(52, c.s * 1.15), rl = Math.min(42, c.l * 0.9);
+    var ROOT_SEGS = 12;
+    // One root from a tree's ground point, growing near-horizontally outward and
+    // dipping down, wavering over time.
+    function growTreeRoot(ctx, gx, gy, side, seed, t, ax, ay, w, h, thick, rhue, rsat, rl) {
+      var len = minDim * (0.05 + 0.025 * ((seed * 13) % 5) / 5);
+      var step = len / ROOT_SEGS, margin = minDim * 0.01, ph = seed * 1.7;
+      var x = gx, y = gy, prev = { x: x, y: y };
+      var ang0 = side > 0 ? 0.15 : Math.PI - 0.15;         // near-horizontal, outward
       for (var i = 1; i <= ROOT_SEGS; i++) {
         var prog = i / ROOT_SEGS;
-        // Undulation: wavers over time and along the length; eases gently toward
-        // straight down as it descends, so roots curve from outward to downward.
-        var ang = ang0 + Math.sin(prog * 4 + ph + t * 0.7) * 0.3 * (1 - 0.35 * prog)
-                       + coil * Math.sin(prog * 3 + ph);
-        ang += (Math.PI / 2 - ang) * (0.02 + 0.13 * prog);
+        var ang = ang0 + Math.sin(prog * 4 + ph + t * 0.6) * 0.3 * (1 - 0.3 * prog);
+        ang += (Math.PI / 2 - ang) * 0.12 * prog;          // dip downward along the length
         x += Math.cos(ang) * step; y += Math.sin(ang) * step;
-        var wd = baseWidth * Math.pow(1 - prog, 0.7) + 0.6; // taper to a fine tip
-        var style = 'hsla(' + rhue + ', ' + rsat + '%, ' + rl + '%, ' + (0.85 * (1 - 0.45 * prog)).toFixed(3) + ')';
+        var wd = thick * Math.pow(1 - prog, 0.7) + 0.4;
+        var style = 'hsla(' + rhue + ', ' + rsat + '%, ' + rl + '%, ' + (0.6 * (1 - 0.45 * prog)).toFixed(3) + ')';
         drawRootSeg(ctx, prev, { x: x, y: y }, style, wd, ax, ay, w, h, margin);
         prev = { x: x, y: y };
       }
     }
 
     function drawRoots(ctx, w, h, t, ax, ay) {
-      var pathBottom = h * 1.06;
-      for (var sIdx = 0; sIdx < 2; sIdx++) {
-        var side = sIdx === 0 ? -1 : 1;
-        var flareT = 0.7;
-        var fx = ribbonX(side, flareT, ax, w), fy = ay + (pathBottom - ay) * flareT;
-        var baseW = ribbonWidth(flareT), nRoots = 6;
-        for (var ri = 0; ri < nRoots; ri++) {
-          var frac = nRoots > 1 ? ri / (nRoots - 1) : 0.5;
-          var ang0 = Math.PI / 2 - side * (0.1 + frac * 1.15); // down, leaning outward across the fan
-          growRoot(ctx, fx + side * baseW * 0.4, fy, ang0, ri + sIdx * 11, t, ax, ay, w, h, baseW * (0.85 - 0.3 * frac));
-        }
+      var gy = h * 0.83, margin = minDim * 0.01;
+      for (var i = 0; i < trees.length; i++) {
+        var tr = trees[i], gx = tr.x;
+        if (rootCleared(gx, gy, ax, ay, w, h, margin)) continue; // no tree here -> no roots
+        var c = color.getCellColor(gx, gy, w, h);
+        var rhue = c.h + (30 - c.h) * 0.72, rsat = Math.min(52, c.s * 1.15), rl = Math.min(40, c.l * 0.85);
+        var thick = 1.0 + 1.6 * tr.z;
+        growTreeRoot(ctx, gx, gy, -1, i, t, ax, ay, w, h, thick, rhue, rsat, rl);
+        growTreeRoot(ctx, gx, gy, 1, i + 5, t, ax, ay, w, h, thick, rhue, rsat, rl);
       }
     }
 
@@ -859,10 +863,10 @@
 
       drawTreesBack(ctx, w, h, t, ax, ay);
       drawGlow(ctx, ax, ay, w, h);
-      drawRoots(ctx, w, h, t, ax, ay);                    // root flare from each trunk base (behind the path)
       drawRibbon(ctx, ribbonCenter(-1, w, h, ax, ay), w, h);
       drawRibbon(ctx, ribbonCenter(1, w, h, ax, ay), w, h);
       drawTreesFront(ctx, w, h, t, ax, ay);               // nearest trees in front, near the bottom
+      drawRoots(ctx, w, h, t, ax, ay);                    // roots along the ground, attached to the trees
       drawCanopy(ctx, w, h, t, ax, ay);                   // leaf branches hanging from the top edge
       drawArcs(ctx, ax, ay, w, h);                         // gold half-rings crowning the apex
     }
