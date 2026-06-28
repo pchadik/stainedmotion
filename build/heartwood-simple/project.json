@@ -1,0 +1,24 @@
+{
+  "file": "index.html",
+  "preview": "preview.png",
+  "general": {
+    "properties": {
+      "schemecolor": {
+        "order": 0,
+        "text": "Scheme Color",
+        "type": "color",
+        "value": "0.04 0.04 0.04"
+      }
+    }
+  },
+  "title": "Heartwood — Simple",
+  "type": "web",
+  "version": 1,
+  "visibility": "private",
+  "tags": [
+    "Abstract",
+    "Relaxing",
+    "Nature"
+  ],
+  "description": "The original Heartwood: two ribbons wind down from a tapered, gold-dripping ring crown — a path converging to a far point and twin trunks at once — breathing in sync over a forest of vined, swaying trees, in earthy greens, golds and umbers."
+}

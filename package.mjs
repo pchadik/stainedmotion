@@ -8,7 +8,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
-const MODES = ['stained-glass', 'art-nouveau-sparse', 'art-nouveau-organic', 'heartwood'];
+const MODES = ['stained-glass', 'art-nouveau-sparse', 'art-nouveau-organic', 'heartwood', 'heartwood-simple'];
 const run = (cmd, cwd) => execSync(cmd, { cwd: cwd || ROOT, stdio: 'inherit' });
 
 run('node build.mjs');

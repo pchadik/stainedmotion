@@ -15,11 +15,15 @@ and the compositions never quite repeat.
 | **Art Nouveau — Organic** — leafy, budding vines sprout in clusters from haloed roundels whose sunbursts reach a drifting meeting point | [open](https://pchadik.github.io/stainedmotion/art-nouveau-organic.html) | `wallpaper-engine-art-nouveau-organic.zip` |
 | **Art Nouveau — Sparse** — the earlier, airier look: vines splay from concentric halos with filigree scrolls and motes | [open](https://pchadik.github.io/stainedmotion/art-nouveau-sparse.html) | `wallpaper-engine-art-nouveau-sparse.zip` |
 | **Heartwood** — a surreal forest: a winding path / twin trunks descend from a tapered, gold-dripping ring crown over a vined forest that fans to the edges | [open](https://pchadik.github.io/stainedmotion/heartwood.html) | `wallpaper-engine-heartwood.zip` |
+| **Heartwood — Simple** — the original Heartwood, frozen: the path/twin-trunks, the gold-dripping ring crown, and the vined forest, without roots or canopy | [open](https://pchadik.github.io/stainedmotion/heartwood-simple.html) | `wallpaper-engine-heartwood-simple.zip` |
 
 The two Art Nouveau variants are independent wallpapers: **Organic** is the
 current design; **Sparse** is a preserved earlier composition, frozen.
 **Heartwood** is a separate piece — a converging path/twin-trunk under a tapered
 ring crown, with a vined forest, in an earthy band of greens, golds and umbers.
+Like the Art Nouveau pair, it has two variants: **Simple** is the original
+composition, frozen; the flagship **Heartwood** continues from it, adding
+undulating roots and a canopy that grows off the top of the frame.
 
 ## Structure
 

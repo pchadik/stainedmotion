@@ -59,6 +59,15 @@ const MODES = {
     sources: ['src/palettes/heartwood.js', 'src/modes/heartwood.js'],
     bootstrap: "App.start('heartwood');",
     rootFiles: ['heartwood.html']
+  },
+  // Heartwood "Simple" — the frozen original Heartwood composition.
+  'heartwood-simple': {
+    title: 'Heartwood — Simple',
+    description: 'The original Heartwood: two ribbons wind down from a tapered, gold-dripping ring crown — a path converging to a far point and twin trunks at once — breathing in sync over a forest of vined, swaying trees, in earthy greens, golds and umbers.',
+    tags: ['Abstract', 'Relaxing', 'Nature'],
+    sources: ['src/palettes/heartwood-v1.js', 'src/modes/heartwood-v1.js'],
+    bootstrap: "App.start('heartwood-simple');",
+    rootFiles: ['heartwood-simple.html']
   }
 };
 

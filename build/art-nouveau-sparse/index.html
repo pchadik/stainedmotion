@@ -802,6 +802,18 @@
           mode: App.createHeartwood({ color: color, motion: motion, palette: App.palettes.heartwood })
         };
       }
+    },
+    // Heartwood "Simple" — frozen snapshot of the original Heartwood look.
+    'heartwood-simple': {
+      background: '#25272b',
+      create: function () {
+        var color = App.createColorEngine(App.palettes.heartwoodV1);
+        var motion = App.createMotion();
+        return {
+          color: color,
+          mode: App.createHeartwoodV1({ color: color, motion: motion, palette: App.palettes.heartwoodV1 })
+        };
+      }
     }
   };
 

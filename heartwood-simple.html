@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Heartwood</title>
+  <title>Heartwood — Simple</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0a0a; }
@@ -326,17 +326,15 @@
   };
 })(window.App = window.App || {});
 
-/* ===== src/palettes/heartwood.js ===== */
-// Heartwood palette: earthy harmonic color — forest greens reaching into olive,
-// moss, gold, amber and umber. Unlike the Art Nouveau palette (which keeps the
-// full hue wheel), this one constrains the drifting root hue to an earth band
-// via `hueRange`, so the scene stays in greens/golds/browns while still moving.
-// Lower lightness than the Art Nouveau modes for a deep, woodland feel.
+/* ===== src/palettes/heartwood-v1.js ===== */
+// Heartwood "Simple" palette — a frozen copy of the Heartwood palette, kept
+// independent so the Simple variant never shifts when the flagship palette is
+// tuned. Earthy harmonic color: forest greens reaching into olive, moss, gold,
+// amber and umber, with the drifting root hue held to an earth band.
 (function (App) {
   App.palettes = App.palettes || {};
-  App.palettes.heartwood = {
+  App.palettes.heartwoodV1 = {
     harmonies: {
-      // All offsets kept small so root-hue + offset never leaves the earth band.
       forest:    [0, -15, 12, -28],   // green core, olive + gold neighbours
       mossGold:  [0, -25, -40, 14],   // green -> amber -> sienna
       barkUmber: [0, 18, -30, 8]      // green <-> umber/brown
@@ -349,17 +347,18 @@
     hueDrift: 0.003,
     harmonySwitchProb: 0.00003,
     crossfadeStep: 0.006,
-    // Keep the root hue ping-ponging in the yellow-green..green range; the small
-    // harmony offsets above carry it down into amber/umber without leaving earth.
     hueRange: { min: 65, max: 115 },
-    // Earthy bronze contour — the nouveau cloisonné line, woodland-tinted.
     outline: '#8a7a45',
     outlineWidth: 1.4
   };
 })(window.App = window.App || {});
 
-/* ===== src/modes/heartwood.js ===== */
-// Heartwood mode — public name "Heartwood". A surreal Art Nouveau forest.
+/* ===== src/modes/heartwood-v1.js ===== */
+// Heartwood "Simple" mode (v1) — public name "Heartwood — Simple". A FROZEN
+// snapshot of the original Heartwood composition, kept as its own wallpaper.
+// The flagship "Heartwood" (src/modes/heartwood.js) continues from here, adding
+// undulating roots and a canopy growing off the top of the frame.
+// A surreal Art Nouveau forest.
 //
 // Two wavy ribbons descend from a shared point high on the canvas: near each
 // other at the top and splaying wide at the bottom — at once a PATH converging
@@ -375,7 +374,7 @@
 //                 with a nouveau contour; breathe + sway in sync
 //   (future overlays: canopy at the top, root flare + leaf litter at the bottom)
 (function (App) {
-  App.createHeartwood = function (deps) {
+  App.createHeartwoodV1 = function (deps) {
     var color = deps.color;
     var motion = deps.motion;
     var palette = deps.palette || {};
@@ -844,7 +843,7 @@
   };
 })(window.App = window.App || {});
 
-    App.start('heartwood');
+    App.start('heartwood-simple');
   </script>
 </body>
 </html>
