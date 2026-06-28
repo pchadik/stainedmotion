@@ -8,11 +8,13 @@
 //
 // Layers, back to front:
 //   ground      - flat dark backdrop (env.background)
-//   forest      - swaying vertical tree-lines, faded by depth
-//   apex glow   - soft warm breathing light at the shared convergence point
+//   forest      - vined, swaying tree-lines that fan toward the edges
+//   apex glow   - dim burgundy light at the shared convergence point
+//   roots       - undulating root flare from each trunk base, kept clear of the path
 //   ribbons     - the two converging trunks/paths: segmented earthy-green fill
 //                 with a nouveau contour; breathe + sway in sync
-//   (future overlays: canopy at the top, root flare + leaf litter at the bottom)
+//   canopy      - leaf branches hanging from the top edge, framing the crown
+//   rings       - tapered, gold-dripping half-ring crown at the convergence
 (function (App) {
   App.createHeartwood = function (deps) {
     var color = deps.color;
@@ -355,6 +357,118 @@
       }
     }
 
+    // ---- roots: an undulating root flare from each trunk base, spreading down
+    // and outward off the bottom of the frame. Drawn behind the ribbons and kept
+    // a margin clear of the path wherever they would cross it. ----
+    function nearPath(x, y, ax, ay, w, h, margin) {
+      if (y < ay || y > h * 1.06) return false;
+      var t = (y - ay) / (h * 1.06 - ay);
+      var half = ribbonWidth(t) * 0.5 + margin;
+      return Math.abs(x - ribbonX(-1, t, ax, w)) < half || Math.abs(x - ribbonX(1, t, ax, w)) < half;
+    }
+
+    // Draw only the part of a root segment that keeps clear of the path margin.
+    function drawRootSeg(ctx, a, b, style, width, ax, ay, w, h, margin) {
+      var ai = nearPath(a.x, a.y, ax, ay, w, h, margin);
+      var bi = nearPath(b.x, b.y, ax, ay, w, h, margin);
+      if (ai && bi) return;
+      if (!ai && !bi) { App.strokePolyline(ctx, [a, b], style, width); return; }
+      var inP = ai ? a : b, outP = ai ? b : a;
+      for (var k = 0; k < 12; k++) {
+        var mx = (inP.x + outP.x) * 0.5, my = (inP.y + outP.y) * 0.5;
+        if (nearPath(mx, my, ax, ay, w, h, margin)) { inP = { x: mx, y: my }; }
+        else { outP = { x: mx, y: my }; }
+      }
+      App.strokePolyline(ctx, [outP, ai ? b : a], style, width);
+    }
+
+    var ROOT_SEGS = 18;
+    function growRoot(ctx, sx, sy, ang0, seed, t, ax, ay, w, h, baseWidth) {
+      var len = minDim * (0.16 + 0.08 * ((seed * 13) % 7) / 7);
+      var step = len / ROOT_SEGS, margin = minDim * 0.01;
+      var x = sx, y = sy, prev = { x: x, y: y };
+      var coil = 0.14 + 0.12 * ((seed * 7) % 5) / 5, ph = seed * 1.7;
+      var c = color.getCellColor(sx, Math.min(h, sy), w, h);
+      var rhue = c.h + (30 - c.h) * 0.72;                  // pull strongly toward umber/sienna
+      var rsat = Math.min(52, c.s * 1.15), rl = Math.min(42, c.l * 0.9);
+      for (var i = 1; i <= ROOT_SEGS; i++) {
+        var prog = i / ROOT_SEGS;
+        // Undulation: wavers over time and along the length; eases gently toward
+        // straight down as it descends, so roots curve from outward to downward.
+        var ang = ang0 + Math.sin(prog * 4 + ph + t * 0.7) * 0.3 * (1 - 0.35 * prog)
+                       + coil * Math.sin(prog * 3 + ph);
+        ang += (Math.PI / 2 - ang) * (0.02 + 0.13 * prog);
+        x += Math.cos(ang) * step; y += Math.sin(ang) * step;
+        var wd = baseWidth * Math.pow(1 - prog, 0.7) + 0.6; // taper to a fine tip
+        var style = 'hsla(' + rhue + ', ' + rsat + '%, ' + rl + '%, ' + (0.85 * (1 - 0.45 * prog)).toFixed(3) + ')';
+        drawRootSeg(ctx, prev, { x: x, y: y }, style, wd, ax, ay, w, h, margin);
+        prev = { x: x, y: y };
+      }
+    }
+
+    function drawRoots(ctx, w, h, t, ax, ay) {
+      var pathBottom = h * 1.06;
+      for (var sIdx = 0; sIdx < 2; sIdx++) {
+        var side = sIdx === 0 ? -1 : 1;
+        var flareT = 0.7;
+        var fx = ribbonX(side, flareT, ax, w), fy = ay + (pathBottom - ay) * flareT;
+        var baseW = ribbonWidth(flareT), nRoots = 6;
+        for (var ri = 0; ri < nRoots; ri++) {
+          var frac = nRoots > 1 ? ri / (nRoots - 1) : 0.5;
+          var ang0 = Math.PI / 2 - side * (0.1 + frac * 1.15); // down, leaning outward across the fan
+          growRoot(ctx, fx + side * baseW * 0.4, fy, ang0, ri + sIdx * 11, t, ax, ay, w, h, baseW * (0.85 - 0.3 * frac));
+        }
+      }
+    }
+
+    // ---- canopy: leaf-laden branches hanging from the top edge into the frame
+    // (and growing off the top), framing the ring crown. Each branch's hang is
+    // limited so it keeps clear of the rings, and they sway gently. ----
+    function leafShape(cx, cy, ang, L, Wd) {
+      var cd = Math.cos(ang), sd = Math.sin(ang), nx = -sd, ny = cd, left = [], right = [];
+      for (var s = 0; s <= 8; s++) {
+        var f = s / 8, px = cx + cd * L * f, py = cy + sd * L * f, off = Wd * Math.sin(Math.PI * f);
+        left.push({ x: px + nx * off, y: py + ny * off });
+        right.push({ x: px - nx * off, y: py - ny * off });
+      }
+      return left.concat(right.reverse());
+    }
+
+    function drawCanopyBranch(ctx, bx, topY, depth, sway, seed, t, w, h) {
+      var segs = 8, stem = [];
+      for (var s = 0; s <= segs; s++) {
+        var f = s / segs;
+        stem.push({ x: bx + sway * f + Math.sin(f * 2.5 + seed) * minDim * 0.012, y: topY + depth * f });
+      }
+      var c = color.getCellColor(bx, Math.max(0, topY + depth * 0.6), w, h);
+      var leafFill = 'hsl(' + (c.h + (120 - c.h) * 0.55) + ', ' + Math.min(52, c.s * 1.1) + '%, ' + Math.min(46, c.l * 0.82) + '%)';
+      var vein = 'rgba(184,154,94,0.45)';
+      App.strokePolyline(ctx, stem, 'hsla(' + (c.h + (40 - c.h) * 0.4) + ', ' + Math.min(46, c.s) + '%, ' + Math.min(38, c.l * 0.65) + '%, 0.85)', 2);
+      for (var li = 0; li < 4; li++) {
+        var f2 = 0.35 + 0.65 * (li / 3), idx = Math.min(segs, Math.round(f2 * segs));
+        var pt = stem[idx], pa = stem[Math.max(0, idx - 1)], pb = stem[Math.min(segs, idx + 1)];
+        var tang = Math.atan2(pb.y - pa.y, pb.x - pa.x), sideL = (li % 2 === 0) ? 1 : -1;
+        var L = minDim * (0.032 + 0.018 * Math.abs(Math.sin(seed + li))), lang = tang + sideL * 1.05;
+        var poly = leafShape(pt.x, pt.y, lang, L, L * 0.34);
+        App.fillPolygon(ctx, poly, leafFill);
+        App.strokePolygon(ctx, poly, vein, 1);
+        App.strokePolyline(ctx, [pt, { x: pt.x + Math.cos(lang) * L, y: pt.y + Math.sin(lang) * L }], vein, 0.8);
+      }
+    }
+
+    function drawCanopy(ctx, w, h, t, ax, ay) {
+      var cx = ringCx(ax, w), R = ringMaxR(ay), topY = -h * 0.05;
+      var nC = Math.max(6, Math.round(w / (minDim * 0.16)));
+      for (var i = 0; i < nC; i++) {
+        var bx = (i + 0.5) / nC * w + Math.sin(i * 12.9) * minDim * 0.02;
+        var dx = bx - cx, full = h * (0.17 + 0.07 * Math.sin(i * 1.7)), limit = full;
+        if (Math.abs(dx) < R) limit = (ay - Math.sqrt(R * R - dx * dx)) - topY - minDim * 0.03;
+        var depth = Math.min(full, limit);
+        if (depth < minDim * 0.05) continue;             // over the ring crown -> no canopy here
+        drawCanopyBranch(ctx, bx, topY, depth, Math.sin(t * 0.5 + i) * minDim * 0.02, i, t, w, h);
+      }
+    }
+
     // ---- lifecycle ----
     function rebuild(w, h) {
       W = w; H = h; minDim = Math.min(w, h);
@@ -384,9 +498,11 @@
 
       drawTreesBack(ctx, w, h, t, ax, ay);
       drawGlow(ctx, ax, ay, w, h);
+      drawRoots(ctx, w, h, t, ax, ay);                    // root flare from each trunk base (behind the path)
       drawRibbon(ctx, ribbonCenter(-1, w, h, ax, ay), w, h);
       drawRibbon(ctx, ribbonCenter(1, w, h, ax, ay), w, h);
       drawTreesFront(ctx, w, h, t, ax, ay);               // nearest trees in front, near the bottom
+      drawCanopy(ctx, w, h, t, ax, ay);                   // leaf branches hanging from the top edge
       drawArcs(ctx, ax, ay, w, h);                         // gold half-rings crowning the apex
     }
 
