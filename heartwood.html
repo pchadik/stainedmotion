@@ -416,6 +416,7 @@
     // ---- forest of vertical tree-lines ----
     var trees = [];
     var crowns = []; // precomputed canopy crowns (see buildCanopy)
+    var groundPts = []; // jagged ground line the root clusters anchor to
     function buildTrees(w, h) {
       trees = [];
       var spacing = minDim * 0.024;
@@ -517,11 +518,11 @@
       if (!tr.hasVine) return;
       var topIdx = Math.max(1, Math.round(TREE_SEGS * (1 - tr.vineH)));
       var midY = h * (0.3 + tr.seedY * 0.4), c = color.getCellColor(tr.x, midY, w, h);
-      var vhue = c.h + (122 - c.h) * 0.6, vsat = Math.min(55, c.s * 1.2), vl = Math.min(46, c.l * 0.85);
+      var vhue = c.h + (122 - c.h) * 0.6, vsat = Math.min(55, c.s * 1.2), vl = Math.min(48, c.l * 0.9);
       // Faint; phases slowly in and out; shimmer on a different cadence from the
       // trees (related — same base shimmer speed, scaled).
       var inout = 0.1 + 0.9 * (0.5 + 0.5 * Math.sin(t * tr.vinePhaseSpeed + tr.vinePhase));
-      var vmul = 0.5 * inout * (0.6 + 0.4 * Math.sin(t * tr.shimSpd * 1.7 + tr.shimPh2));
+      var vmul = 0.56 * inout * (0.6 + 0.4 * Math.sin(t * tr.shimSpd * 1.7 + tr.shimPh2));
       var prev = null;
       for (var s = TREE_SEGS; s >= topIdx; s--) {
         var p = pts[s];
@@ -557,9 +558,9 @@
         var pts = treePoints(tr, w, h, t);
         var midY = h * (0.3 + tr.seedY * 0.4);
         var c = color.getCellColor(tr.x, midY, w, h);
-        var l = Math.min(44, c.l * (0.45 + 0.28 * tr.z)); // capped so none read near-white
+        var l = Math.min(46, c.l * (0.48 + 0.29 * tr.z)); // capped so none read near-white
         var hsl = (c.h + tr.hueJ) + ', ' + Math.min(52, c.s * 1.1) + '%, ' + l + '%';
-        var baseA = (0.22 + 0.30 * tr.z) * shimmer(tr, t);
+        var baseA = (0.24 + 0.31 * tr.z) * shimmer(tr, t);
         for (var s = 0; s < TREE_SEGS; s++) {
           var a = baseA * fadeLower((pts[s].y + pts[s + 1].y) * 0.5 / h);
           if (a < 0.01) continue;
@@ -579,9 +580,9 @@
         var pts = treePoints(tr, w, h, t);
         var midY = h * (0.3 + tr.seedY * 0.4);
         var c = color.getCellColor(tr.x, midY, w, h);
-        var l = Math.min(38, c.l * 0.42);                 // darker, silhouette-like
+        var l = Math.min(40, c.l * 0.46);                 // darker, silhouette-like
         var hsl = (c.h + tr.hueJ) + ', ' + Math.min(50, c.s * 1.05) + '%, ' + l + '%';
-        var baseA = (0.34 + 0.40 * tr.z) * shimmer(tr, t);
+        var baseA = (0.36 + 0.41 * tr.z) * shimmer(tr, t);
         var width = tr.width * 1.5;
         for (var s = 0; s < TREE_SEGS; s++) {
           var a = baseA * fadeLower((pts[s].y + pts[s + 1].y) * 0.5 / h);
@@ -739,9 +740,24 @@
       }
     }
 
-    // ---- roots: each tree puts out roots near the ground line, spreading
-    // roughly horizontally (and dipping), so together they read as a low band of
-    // roots attached to the trunks. Undulating; kept clear of the path + rings. ----
+    // ---- roots: each tree puts out a clustered fan of roots from a JAGGED
+    // ground line (not a flat horizontal), descending toward the bottom.
+    // Undulating; kept clear of the path + rings; faded in at the top so they
+    // blend into the fading trunks. ----
+    function buildGround(w, h) {
+      groundPts = [];
+      var base = h * 0.78, n = Math.max(6, Math.round(w / (minDim * 0.16)));
+      for (var i = 0; i <= n; i++) groundPts.push({ x: i / n * w, y: base + (Math.random() - 0.5) * h * 0.08 });
+    }
+    function groundY(x) {
+      var n = groundPts.length;
+      if (n < 2) return 0.78 * H;
+      if (x <= groundPts[0].x) return groundPts[0].y;
+      for (var i = 1; i < n; i++) {
+        if (x <= groundPts[i].x) { var a = groundPts[i - 1], b = groundPts[i]; return a.y + (b.y - a.y) * (x - a.x) / (b.x - a.x || 1); }
+      }
+      return groundPts[n - 1].y;
+    }
     function nearPath(x, y, ax, ay, w, h, margin) {
       if (y < ay || y > h * 1.06) return false;
       var t = (y - ay) / (h * 1.06 - ay);
@@ -783,7 +799,7 @@
         ang += (Math.PI / 2 - ang) * 0.06;                 // gentle pull back toward down
         x += Math.cos(ang) * step; y += Math.sin(ang) * step;
         var wd = baseThick * rt.thick * Math.pow(1 - prog, 0.7) + 0.5;
-        var aRoot = 0.62 * Math.min(1, prog * 4) * (1 - 0.3 * prog); // fade in at the top, taper at the tip
+        var aRoot = 0.55 * Math.min(1, prog * 4) * (1 - 0.3 * prog); // fade in at the top, taper at the tip
         var style = 'hsla(' + rhue + ', ' + rsat + '%, ' + rl + '%, ' + aRoot.toFixed(3) + ')';
         drawRootSeg(ctx, prev, { x: x, y: y }, style, wd, ax, ay, w, h, margin);
         prev = { x: x, y: y };
@@ -791,12 +807,12 @@
     }
 
     function drawRoots(ctx, w, h, t, ax, ay) {
-      var gy = h * 0.78, margin = minDim * 0.01;
+      var margin = minDim * 0.01;
+      var rc = color.getCellColor(w * 0.5, h * 0.78, w, h);     // one colour for all roots (even L/R), dimmer
+      var rhue = rc.h + (30 - rc.h) * 0.72, rsat = Math.min(50, rc.s * 1.1), rl = Math.min(33, rc.l * 0.7);
       for (var i = 0; i < trees.length; i++) {
-        var tr = trees[i], gx = tr.x;
+        var tr = trees[i], gx = tr.x, gy = groundY(gx);          // jagged ground line
         if (rootCleared(gx, gy, ax, ay, w, h, margin)) continue; // no tree here -> no roots
-        var c = color.getCellColor(gx, gy, w, h);
-        var rhue = c.h + (30 - c.h) * 0.72, rsat = Math.min(52, c.s * 1.15), rl = Math.min(40, c.l * 0.85);
         var baseThick = 1.6 + 2.4 * tr.z;
         for (var k = 0; k < tr.roots.length; k++) growTreeRoot(ctx, gx, gy, tr.roots[k], i * 7 + k, t, ax, ay, w, h, baseThick, rhue, rsat, rl);
       }
@@ -891,7 +907,9 @@
           for (var ti = 0; ti < trees.length; ti++) { var d = Math.abs(trees[ti].x - sx); if (d < bd) { bd = d; best = trees[ti].x; } }
           sx += (best - sx) * 0.5;
           var ex = sx - ax, ey = sy - ay;
-          seeds.push({ x: sx, y: sy, draw: (sy < drawBot && ex * ex + ey * ey > (Rbase + CH) * (Rbase + CH)) });
+          var drawable = (sy < drawBot && ex * ex + ey * ey > (Rbase + CH) * (Rbase + CH));
+          if (drawable && Math.random() < 0.3) continue;          // drop ~30% -> neighbours merge/grow (less uniform)
+          seeds.push({ x: sx, y: sy, draw: drawable });
         }
       }
       for (var rs = 0; rs <= 9; rs++) {                            // ring seeds hug the dome cleanly
@@ -931,6 +949,7 @@
         }
         crowns.push({
           samp: samp, cen: cen, CH: CH, LOBE: LOBE, seed: i * 1.7, seed2: i * 3.1,
+          lobeMul: 0.7 + Math.random() * 0.5, warpAmp: Math.random() * 0.22, warpSeed: Math.random() * Math.PI * 2,
           hue: col.h + (112 - col.h) * 0.5, sat: Math.min(48, col.s * 1.0), lit: Math.min(40, col.l * 0.82),
           shards: shards, fronds: fronds
         });
@@ -943,8 +962,10 @@
         var cr = crowns[i], samp = cr.samp, M = samp.length, outer = [];
         for (var m = 0; m < M; m++) {
           var p = samp[m], f = m / M;
-          var lobe = cr.LOBE * (0.55 * Math.sin(7 * 2 * Math.PI * f + cr.seed) + 0.45 * Math.sin(13 * 2 * Math.PI * f + cr.seed2 + phase));
+          var lobe = cr.LOBE * cr.lobeMul * (0.55 * Math.sin(7 * 2 * Math.PI * f + cr.seed) + 0.45 * Math.sin(13 * 2 * Math.PI * f + cr.seed2 + phase))
+                   + cr.LOBE * cr.warpAmp * Math.sin(4 * Math.PI * f + cr.warpSeed); // per-crown mutation
           var inset = cr.CH - lobe;                                // both neighbours retreat -> channel
+          if (inset < cr.CH * 0.2) inset = cr.CH * 0.2;            // keep the shyness channel open
           outer.push({ x: p.x - p.nx * inset, y: p.y - p.ny * inset });
         }
         App.fillPolygon(ctx, outer, 'hsl(' + cr.hue + ', ' + cr.sat + '%, ' + cr.lit + '%)');
@@ -965,6 +986,7 @@
     function rebuild(w, h) {
       W = w; H = h; minDim = Math.min(w, h);
       buildTrees(w, h);
+      buildGround(w, h);
       buildCanopy(w, h);
       builtW = w; builtH = h;
     }
