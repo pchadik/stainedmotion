@@ -415,6 +415,7 @@
 
     // ---- forest of vertical tree-lines ----
     var trees = [];
+    var crowns = []; // precomputed canopy crowns (see buildCanopy)
     function buildTrees(w, h) {
       trees = [];
       var spacing = minDim * 0.024;
@@ -797,9 +798,14 @@
       }
     }
 
-    // ---- canopy: leaf-laden branches hanging from the top edge into the frame
-    // (and growing off the top), framing the ring crown. Each branch's hang is
-    // limited so it keeps clear of the rings, and they sway gently. ----
+    // ---- canopy: a bushy "crown shyness" canopy at the top. Each crown is a
+    // Voronoi cell (seeds snapped to the trunks, kept out of the ring disc) whose
+    // edges are inset along their own normals, so neighbours nearly-but-not-quite
+    // touch and leave thin winding channels of BARE background — the faint
+    // back-trees show through them as depth. Scalloped silhouettes + two-tone
+    // leaf clumps + interior leaf dabs read as foliage, not flat blobs or drops.
+    // Geometry/colour/clumps are precomputed in buildCanopy; each frame only the
+    // scallop is animated. ----
     function leafShape(cx, cy, ang, L, Wd) {
       var cd = Math.cos(ang), sd = Math.sin(ang), nx = -sd, ny = cd, left = [], right = [];
       for (var s = 0; s <= 8; s++) {
@@ -810,38 +816,132 @@
       return left.concat(right.reverse());
     }
 
-    function drawCanopyBranch(ctx, bx, topY, depth, sway, seed, t, w, h) {
-      var segs = 8, stem = [];
-      for (var s = 0; s <= segs; s++) {
-        var f = s / segs;
-        stem.push({ x: bx + sway * f + Math.sin(f * 2.5 + seed) * minDim * 0.012, y: topY + depth * f });
+    // Keep the part of poly where (p - M) . N <= 0 (Sutherland-Hodgman).
+    function clipHalfPlane(poly, mx, my, nx, ny) {
+      var out = [], n = poly.length;
+      for (var i = 0; i < n; i++) {
+        var a = poly[i], b = poly[(i + 1) % n];
+        var da = (a.x - mx) * nx + (a.y - my) * ny, db = (b.x - mx) * nx + (b.y - my) * ny;
+        if (da <= 0) out.push(a);
+        if ((da < 0) !== (db < 0)) { var tt = da / (da - db); out.push({ x: a.x + (b.x - a.x) * tt, y: a.y + (b.y - a.y) * tt }); }
       }
-      var c = color.getCellColor(bx, Math.max(0, topY + depth * 0.6), w, h);
-      var leafFill = 'hsl(' + (c.h + (120 - c.h) * 0.55) + ', ' + Math.min(52, c.s * 1.1) + '%, ' + Math.min(46, c.l * 0.82) + '%)';
-      var vein = 'rgba(184,154,94,0.45)';
-      App.strokePolyline(ctx, stem, 'hsla(' + (c.h + (40 - c.h) * 0.4) + ', ' + Math.min(46, c.s) + '%, ' + Math.min(38, c.l * 0.65) + '%, 0.85)', 2);
-      for (var li = 0; li < 4; li++) {
-        var f2 = 0.35 + 0.65 * (li / 3), idx = Math.min(segs, Math.round(f2 * segs));
-        var pt = stem[idx], pa = stem[Math.max(0, idx - 1)], pb = stem[Math.min(segs, idx + 1)];
-        var tang = Math.atan2(pb.y - pa.y, pb.x - pa.x), sideL = (li % 2 === 0) ? 1 : -1;
-        var L = minDim * (0.032 + 0.018 * Math.abs(Math.sin(seed + li))), lang = tang + sideL * 1.05;
-        var poly = leafShape(pt.x, pt.y, lang, L, L * 0.34);
-        App.fillPolygon(ctx, poly, leafFill);
-        App.strokePolygon(ctx, poly, vein, 1);
-        App.strokePolyline(ctx, [pt, { x: pt.x + Math.cos(lang) * L, y: pt.y + Math.sin(lang) * L }], vein, 0.8);
+      return out;
+    }
+    function polyArea(poly) {
+      var a = 0;
+      for (var i = 0, n = poly.length; i < n; i++) { var p = poly[i], q = poly[(i + 1) % n]; a += p.x * q.y - q.x * p.y; }
+      return Math.abs(a) * 0.5;
+    }
+    function polyCentroid(poly) {
+      var x = 0, y = 0, n = poly.length;
+      for (var i = 0; i < n; i++) { x += poly[i].x; y += poly[i].y; }
+      return { x: x / n, y: y / n };
+    }
+    // Resample the perimeter to M points, each with the outward unit normal of
+    // the edge it sits on.
+    function resampleEdges(poly, M, cx, cy) {
+      var n = poly.length, edges = [], total = 0;
+      for (var i = 0; i < n; i++) {
+        var a = poly[i], b = poly[(i + 1) % n];
+        var dx = b.x - a.x, dy = b.y - a.y, len = Math.sqrt(dx * dx + dy * dy) || 1;
+        var nx = dy / len, ny = -dx / len, mx = (a.x + b.x) * 0.5, my = (a.y + b.y) * 0.5;
+        if ((mx - cx) * nx + (my - cy) * ny < 0) { nx = -nx; ny = -ny; }
+        edges.push({ ax: a.x, ay: a.y, bx: b.x, by: b.y, len: len, nx: nx, ny: ny });
+        total += len;
+      }
+      var samp = [], step = total / M, ei = 0, acc = 0;
+      for (var k = 0; k < M; k++) {
+        var target = k * step;
+        while (ei < edges.length - 1 && acc + edges[ei].len < target) { acc += edges[ei].len; ei++; }
+        var e = edges[ei], f = (target - acc) / e.len;
+        samp.push({ x: e.ax + (e.bx - e.ax) * f, y: e.ay + (e.by - e.ay) * f, nx: e.nx, ny: e.ny });
+      }
+      return samp;
+    }
+
+    function buildCanopy(w, h) {
+      crowns = [];
+      var ax = w * 0.5, ay = h * apexFrac.y;
+      var Rbase = Math.min(ay * 0.96, minDim * 0.62) * 1.013;       // ring radius incl. max breath
+      var CH = minDim * 0.014, LOBE = CH * 0.6, rimClamp = Rbase + CH + LOBE;
+      var spacing = minDim * 0.15, bandTop = -h * 0.06, drawBot = h * 0.33, gridBot = h * 0.5;
+      var cols = Math.max(4, Math.round(w / spacing));
+      var rows = Math.max(3, Math.round((gridBot - bandTop) / spacing));
+      var seeds = [];
+      // Seed the whole region; only those in-band AND outside the disc are drawn.
+      // The rest (below the band, inside the disc) are partition-only bounds.
+      for (var r = 0; r < rows; r++) {
+        for (var c = 0; c <= cols; c++) {
+          var sx = (c + (r % 2) * 0.5) / cols * w + (Math.random() - 0.5) * spacing * 0.45;
+          var sy = bandTop + (gridBot - bandTop) * (r / (rows - 1)) + (Math.random() - 0.5) * spacing * 0.3;
+          var best = sx, bd = 1e9;                                  // snap toward nearest trunk
+          for (var ti = 0; ti < trees.length; ti++) { var d = Math.abs(trees[ti].x - sx); if (d < bd) { bd = d; best = trees[ti].x; } }
+          sx += (best - sx) * 0.5;
+          var ex = sx - ax, ey = sy - ay;
+          seeds.push({ x: sx, y: sy, draw: (sy < drawBot && ex * ex + ey * ey > (Rbase + CH) * (Rbase + CH)) });
+        }
+      }
+      for (var rs = 0; rs <= 9; rs++) {                            // ring seeds hug the dome cleanly
+        var a = Math.PI + Math.PI * (rs / 9);
+        seeds.push({ x: ax + Math.cos(a) * Rbase * 0.82, y: ay + Math.sin(a) * Rbase * 0.82, draw: false });
+      }
+      for (var i = 0; i < seeds.length; i++) {
+        if (!seeds[i].draw) continue;
+        var s = seeds[i];
+        var poly = [
+          { x: -w * 0.12, y: bandTop - h * 0.12 }, { x: w * 1.12, y: bandTop - h * 0.12 },
+          { x: w * 1.12, y: gridBot + h * 0.05 }, { x: -w * 0.12, y: gridBot + h * 0.05 }
+        ];
+        for (var j = 0; j < seeds.length && poly.length >= 3; j++) {
+          if (j === i) continue;
+          var o = seeds[j];
+          poly = clipHalfPlane(poly, (s.x + o.x) * 0.5, (s.y + o.y) * 0.5, o.x - s.x, o.y - s.y);
+        }
+        if (poly.length < 3 || polyArea(poly) < 0.004 * minDim * minDim) continue;
+        var cen = polyCentroid(poly), samp = resampleEdges(poly, 40, cen.x, cen.y);
+        for (var m = 0; m < samp.length; m++) {                    // safety: stay shy of the dome
+          var p = samp[m], rx = p.x - ax, ry = p.y - ay, rd = Math.sqrt(rx * rx + ry * ry) || 1;
+          if (rd < rimClamp) { var fz = rimClamp / rd; p.x = ax + rx * fz; p.y = ay + ry * fz; p.nx = rx / rd; p.ny = ry / rd; }
+        }
+        var col = color.getCellColor(cen.x, Math.max(0, cen.y), w, h), ext = Math.sqrt(polyArea(poly));
+        var clumps = [], dabs = [];
+        for (var cl = 0; cl < 4; cl++) {
+          var top = cl < 2;
+          clumps.push({ x: cen.x + (Math.random() - 0.5) * ext * 0.4, y: cen.y + (top ? -1 : 1) * ext * (0.08 + Math.random() * 0.14), r: ext * (0.13 + Math.random() * 0.09), light: top });
+        }
+        for (var dd = 0; dd < 3; dd++) {
+          dabs.push({ ox: (Math.random() - 0.5) * ext * 0.45, oy: (Math.random() - 0.5) * ext * 0.38, ang: Math.random() * Math.PI * 2, L: ext * (0.11 + Math.random() * 0.07) });
+        }
+        crowns.push({
+          samp: samp, cen: cen, CH: CH, LOBE: LOBE, seed: i * 1.7, seed2: i * 3.1,
+          hue: col.h + (112 - col.h) * 0.5, sat: Math.min(48, col.s * 1.0), lit: Math.min(40, col.l * 0.82),
+          clumps: clumps, dabs: dabs
+        });
       }
     }
 
     function drawCanopy(ctx, w, h, t, ax, ay) {
-      var cx = ringCx(ax, w), R = ringMaxR(ay), topY = -h * 0.05;
-      var nC = Math.max(6, Math.round(w / (minDim * 0.16)));
-      for (var i = 0; i < nC; i++) {
-        var bx = (i + 0.5) / nC * w + Math.sin(i * 12.9) * minDim * 0.02;
-        var dx = bx - cx, full = h * (0.17 + 0.07 * Math.sin(i * 1.7)), limit = full;
-        if (Math.abs(dx) < R) limit = (ay - Math.sqrt(R * R - dx * dx)) - topY - minDim * 0.03;
-        var depth = Math.min(full, limit);
-        if (depth < minDim * 0.05) continue;             // over the ring crown -> no canopy here
-        drawCanopyBranch(ctx, bx, topY, depth, Math.sin(t * 0.5 + i) * minDim * 0.02, i, t, w, h);
+      var phase = breath * 0.6 + animTime * 0.00012;
+      for (var i = 0; i < crowns.length; i++) {
+        var cr = crowns[i], samp = cr.samp, M = samp.length, outer = [];
+        for (var m = 0; m < M; m++) {
+          var p = samp[m], f = m / M;
+          var lobe = cr.LOBE * (0.55 * Math.sin(7 * 2 * Math.PI * f + cr.seed) + 0.45 * Math.sin(13 * 2 * Math.PI * f + cr.seed2 + phase));
+          var inset = cr.CH - lobe;                                // both neighbours retreat -> channel
+          outer.push({ x: p.x - p.nx * inset, y: p.y - p.ny * inset });
+        }
+        App.fillPolygon(ctx, outer, 'hsl(' + cr.hue + ', ' + cr.sat + '%, ' + cr.lit + '%)');
+        for (var cl = 0; cl < cr.clumps.length; cl++) {
+          var k = cr.clumps[cl], ll = k.light ? Math.min(48, cr.lit * 1.22) : cr.lit * 0.6;
+          App.fillCircle(ctx, k.x, k.y, k.r, 'hsl(' + cr.hue + ', ' + cr.sat + '%, ' + ll + '%)');
+        }
+        for (var dd = 0; dd < cr.dabs.length; dd++) {              // interior leaf dabs (leafy texture)
+          var db = cr.dabs[dd], lp = leafShape(cr.cen.x + db.ox, cr.cen.y + db.oy, db.ang, db.L, db.L * 0.34);
+          App.fillPolygon(ctx, lp, 'hsl(' + cr.hue + ', ' + cr.sat + '%, ' + Math.min(46, cr.lit * 1.1) + '%)');
+          App.strokePolygon(ctx, lp, 'rgba(184,154,94,0.26)', 0.8);
+        }
+        App.strokePolygon(ctx, outer, 'rgba(184,154,94,0.28)', 1);   // bronze cloisonne rim
+        for (var v = 0; v < 4; v++) { var idx = Math.floor((v + 0.5) / 4 * M); App.strokePolyline(ctx, [cr.cen, outer[idx]], 'rgba(184,154,94,0.20)', 0.8); }
       }
     }
 
@@ -849,6 +949,7 @@
     function rebuild(w, h) {
       W = w; H = h; minDim = Math.min(w, h);
       buildTrees(w, h);
+      buildCanopy(w, h);
       builtW = w; builtH = h;
     }
     function init(w, h) { rebuild(w, h); }
