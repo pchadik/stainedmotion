@@ -65,15 +65,18 @@
         var dxc = Math.max(-1, Math.min(1, (baseX - w * 0.5) / (w * 0.5))); // -1 left .. +1 right
         var edge = Math.max(0, (Math.abs(dxc) - 0.25) / 0.75);            // 0 near path, 1 at edge
         var centerF = 1 + 0.35 * (1 - Math.abs(dxc));                     // trees nearer centre thicker
-        var rootDefs = [];                                               // fewer, varied descending roots
-        var nrk = Math.random() < 0.55 ? (Math.random() < 0.25 ? 2 : 1) : 0;
-        for (var rk = 0; rk < nrk; rk++) {
-          rootDefs.push({
-            dx: (Math.random() - 0.5) * minDim * 0.012,   // slight start offset
-            dir: (Math.random() - 0.5) * 1.0, lenF: 0.72 + Math.random() * 0.6,
-            coil: 0.08 + Math.random() * 0.24, amp: 0.16 + Math.random() * 0.3,
-            ph: Math.random() * Math.PI * 2, spd: 0.4 + Math.random() * 0.6, thick: 0.75 + Math.random() * 1.15
-          });
+        var rootDefs = [];                                               // a clustered fan of descending roots
+        if (Math.random() < 0.72) {
+          var nrk = 2 + Math.floor(Math.random() * 3);                   // 2-4 roots per cluster
+          for (var rk = 0; rk < nrk; rk++) {
+            var rfrac = nrk > 1 ? rk / (nrk - 1) : 0.5;
+            rootDefs.push({
+              dx: (rfrac - 0.5) * minDim * 0.028 + (Math.random() - 0.5) * minDim * 0.006, // clustered fan offset
+              dir: (rfrac - 0.5) * 0.95 + (Math.random() - 0.5) * 0.25, lenF: 0.75 + Math.random() * 0.55,
+              coil: 0.08 + Math.random() * 0.24, amp: 0.16 + Math.random() * 0.3,
+              ph: Math.random() * Math.PI * 2, spd: 0.4 + Math.random() * 0.6, thick: 1.0 + Math.random() * 1.3
+            });
+          }
         }
         trees.push({
           x: baseX,
@@ -418,21 +421,22 @@
                        + rt.coil * Math.sin(prog * 2 + rt.ph);
         ang += (Math.PI / 2 - ang) * 0.06;                 // gentle pull back toward down
         x += Math.cos(ang) * step; y += Math.sin(ang) * step;
-        var wd = baseThick * rt.thick * Math.pow(1 - prog, 0.7) + 0.4;
-        var style = 'hsla(' + rhue + ', ' + rsat + '%, ' + rl + '%, ' + (0.62 * (1 - 0.4 * prog)).toFixed(3) + ')';
+        var wd = baseThick * rt.thick * Math.pow(1 - prog, 0.7) + 0.5;
+        var aRoot = 0.62 * Math.min(1, prog * 4) * (1 - 0.3 * prog); // fade in at the top, taper at the tip
+        var style = 'hsla(' + rhue + ', ' + rsat + '%, ' + rl + '%, ' + aRoot.toFixed(3) + ')';
         drawRootSeg(ctx, prev, { x: x, y: y }, style, wd, ax, ay, w, h, margin);
         prev = { x: x, y: y };
       }
     }
 
     function drawRoots(ctx, w, h, t, ax, ay) {
-      var gy = h * 0.8, margin = minDim * 0.01;
+      var gy = h * 0.78, margin = minDim * 0.01;
       for (var i = 0; i < trees.length; i++) {
         var tr = trees[i], gx = tr.x;
         if (rootCleared(gx, gy, ax, ay, w, h, margin)) continue; // no tree here -> no roots
         var c = color.getCellColor(gx, gy, w, h);
         var rhue = c.h + (30 - c.h) * 0.72, rsat = Math.min(52, c.s * 1.15), rl = Math.min(40, c.l * 0.85);
-        var baseThick = 1.0 + 1.6 * tr.z;
+        var baseThick = 1.6 + 2.4 * tr.z;
         for (var k = 0; k < tr.roots.length; k++) growTreeRoot(ctx, gx, gy, tr.roots[k], i * 7 + k, t, ax, ay, w, h, baseThick, rhue, rsat, rl);
       }
     }
@@ -498,12 +502,21 @@
       return samp;
     }
 
+    // A fractal frond: an angular, self-similar branch (precomputed segments).
+    function buildFrond(x, y, ang, len, depth, out) {
+      var ex = x + Math.cos(ang) * len, ey = y + Math.sin(ang) * len;
+      out.push({ ax: x, ay: y, bx: ex, by: ey });
+      if (depth <= 0) return;
+      buildFrond(ex, ey, ang - 0.6, len * 0.6, depth - 1, out);
+      buildFrond(ex, ey, ang + 0.6, len * 0.6, depth - 1, out);
+    }
+
     function buildCanopy(w, h) {
       crowns = [];
       var ax = w * 0.5, ay = h * apexFrac.y;
       var Rbase = Math.min(ay * 0.96, minDim * 0.62) * 1.013;       // ring radius incl. max breath
       var CH = minDim * 0.014, LOBE = CH * 0.6, rimClamp = Rbase + CH + LOBE;
-      var spacing = minDim * 0.15, bandTop = -h * 0.06, drawBot = h * 0.33, gridBot = h * 0.5;
+      var spacing = minDim * 0.13, bandTop = -h * 0.06, drawBot = h * 0.33, gridBot = h * 0.5;
       var cols = Math.max(4, Math.round(w / spacing));
       var rows = Math.max(3, Math.round((gridBot - bandTop) / spacing));
       var seeds = [];
@@ -543,18 +556,22 @@
           if (rd < rimClamp) { var fz = rimClamp / rd; p.x = ax + rx * fz; p.y = ay + ry * fz; p.nx = rx / rd; p.ny = ry / rd; }
         }
         var col = color.getCellColor(cen.x, Math.max(0, cen.y), w, h), ext = Math.sqrt(polyArea(poly));
-        var clumps = [], dabs = [];
-        for (var cl = 0; cl < 4; cl++) {
-          var top = cl < 2;
-          clumps.push({ x: cen.x + (Math.random() - 0.5) * ext * 0.4, y: cen.y + (top ? -1 : 1) * ext * (0.08 + Math.random() * 0.14), r: ext * (0.13 + Math.random() * 0.09), light: top });
+        var shards = [], fronds = [];
+        for (var sh = 0; sh < 4; sh++) {                          // angular faceted shards (two-tone volume)
+          var top = sh < 2, scx = cen.x + (Math.random() - 0.5) * ext * 0.5, scy = cen.y + (top ? -1 : 1) * ext * (0.06 + Math.random() * 0.16);
+          var sr = ext * (0.12 + Math.random() * 0.1), nn = 6, base = Math.random() * Math.PI * 2, sp = [];
+          for (var v = 0; v < nn; v++) { var aa = base + v / nn * Math.PI * 2, rr = sr * (v % 2 === 0 ? 1 : 0.45); sp.push({ x: scx + Math.cos(aa) * rr, y: scy + Math.sin(aa) * rr }); }
+          shards.push({ pts: sp, light: top });
         }
-        for (var dd = 0; dd < 3; dd++) {
-          dabs.push({ ox: (Math.random() - 0.5) * ext * 0.45, oy: (Math.random() - 0.5) * ext * 0.38, ang: Math.random() * Math.PI * 2, L: ext * (0.11 + Math.random() * 0.07) });
+        for (var fr = 0; fr < 2; fr++) {                          // fractal fronds (angular, self-similar)
+          var fseg = [];
+          buildFrond(cen.x + (Math.random() - 0.5) * ext * 0.35, cen.y + ext * (0.05 + Math.random() * 0.12), -Math.PI / 2 + (Math.random() - 0.5) * 1.0, ext * (0.22 + Math.random() * 0.1), 2, fseg);
+          fronds.push(fseg);
         }
         crowns.push({
           samp: samp, cen: cen, CH: CH, LOBE: LOBE, seed: i * 1.7, seed2: i * 3.1,
           hue: col.h + (112 - col.h) * 0.5, sat: Math.min(48, col.s * 1.0), lit: Math.min(40, col.l * 0.82),
-          clumps: clumps, dabs: dabs
+          shards: shards, fronds: fronds
         });
       }
     }
@@ -570,14 +587,13 @@
           outer.push({ x: p.x - p.nx * inset, y: p.y - p.ny * inset });
         }
         App.fillPolygon(ctx, outer, 'hsl(' + cr.hue + ', ' + cr.sat + '%, ' + cr.lit + '%)');
-        for (var cl = 0; cl < cr.clumps.length; cl++) {
-          var k = cr.clumps[cl], ll = k.light ? Math.min(48, cr.lit * 1.22) : cr.lit * 0.6;
-          App.fillCircle(ctx, k.x, k.y, k.r, 'hsl(' + cr.hue + ', ' + cr.sat + '%, ' + ll + '%)');
+        for (var sh = 0; sh < cr.shards.length; sh++) {           // angular shards (two-tone volume)
+          var k = cr.shards[sh], ll = k.light ? Math.min(48, cr.lit * 1.22) : cr.lit * 0.58;
+          App.fillPolygon(ctx, k.pts, 'hsl(' + cr.hue + ', ' + cr.sat + '%, ' + ll + '%)');
         }
-        for (var dd = 0; dd < cr.dabs.length; dd++) {              // interior leaf dabs (leafy texture)
-          var db = cr.dabs[dd], lp = leafShape(cr.cen.x + db.ox, cr.cen.y + db.oy, db.ang, db.L, db.L * 0.34);
-          App.fillPolygon(ctx, lp, 'hsl(' + cr.hue + ', ' + cr.sat + '%, ' + Math.min(46, cr.lit * 1.1) + '%)');
-          App.strokePolygon(ctx, lp, 'rgba(184,154,94,0.26)', 0.8);
+        for (var fr = 0; fr < cr.fronds.length; fr++) {           // fractal fronds
+          var fs = cr.fronds[fr];
+          for (var sg = 0; sg < fs.length; sg++) App.strokePolyline(ctx, [{ x: fs[sg].ax, y: fs[sg].ay }, { x: fs[sg].bx, y: fs[sg].by }], 'rgba(150,130,80,0.5)', 0.9);
         }
         App.strokePolygon(ctx, outer, 'rgba(184,154,94,0.28)', 1);   // bronze cloisonne rim
         for (var v = 0; v < 4; v++) { var idx = Math.floor((v + 0.5) / 4 * M); App.strokePolyline(ctx, [cr.cen, outer[idx]], 'rgba(184,154,94,0.20)', 0.8); }
