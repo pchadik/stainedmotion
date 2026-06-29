@@ -425,6 +425,16 @@
         var dxc = Math.max(-1, Math.min(1, (baseX - w * 0.5) / (w * 0.5))); // -1 left .. +1 right
         var edge = Math.max(0, (Math.abs(dxc) - 0.25) / 0.75);            // 0 near path, 1 at edge
         var centerF = 1 + 0.35 * (1 - Math.abs(dxc));                     // trees nearer centre thicker
+        var rootDefs = [];                                               // fewer, varied descending roots
+        var nrk = Math.random() < 0.55 ? (Math.random() < 0.25 ? 2 : 1) : 0;
+        for (var rk = 0; rk < nrk; rk++) {
+          rootDefs.push({
+            dx: (Math.random() - 0.5) * minDim * 0.012,   // slight start offset
+            dir: (Math.random() - 0.5) * 1.0, lenF: 0.72 + Math.random() * 0.6,
+            coil: 0.08 + Math.random() * 0.24, amp: 0.16 + Math.random() * 0.3,
+            ph: Math.random() * Math.PI * 2, spd: 0.4 + Math.random() * 0.6, thick: 0.75 + Math.random() * 1.15
+          });
+        }
         trees.push({
           x: baseX,
           z: z,
@@ -451,7 +461,8 @@
           vineCoils: 2.5 + Math.random() * 3,
           vineAmp: minDim * (0.004 + 0.005 * Math.random()),
           vinePhase: Math.random() * Math.PI * 2,
-          vinePhaseSpeed: (2 * Math.PI) / (8 + Math.random() * 8) // 8-16s phase in/out
+          vinePhaseSpeed: (2 * Math.PI) / (8 + Math.random() * 8), // 8-16s phase in/out
+          roots: rootDefs
         });
       }
     }
@@ -753,36 +764,36 @@
       App.strokePolyline(ctx, [outP, ai ? b : a], style, width);
     }
 
-    var ROOT_SEGS = 12;
-    // One root from a tree's ground point, growing near-horizontally outward and
-    // dipping down, wavering over time.
-    function growTreeRoot(ctx, gx, gy, side, seed, t, ax, ay, w, h, thick, rhue, rsat, rl) {
-      var len = minDim * (0.05 + 0.025 * ((seed * 13) % 5) / 5);
-      var step = len / ROOT_SEGS, margin = minDim * 0.01, ph = seed * 1.7;
-      var x = gx, y = gy, prev = { x: x, y: y };
-      var ang0 = side > 0 ? 0.15 : Math.PI - 0.15;         // near-horizontal, outward
+    var ROOT_SEGS = 14;
+    // One root descending from a tree's ground point toward the bottom of the
+    // frame, leaning and wavering over time. rt holds its per-root variation.
+    function growTreeRoot(ctx, gx, gy, rt, seed, t, ax, ay, w, h, baseThick, rhue, rsat, rl) {
+      var targetLen = (h * 1.04 - gy) * rt.lenF;           // reach toward (or past) the bottom
+      var step = targetLen / ROOT_SEGS, margin = minDim * 0.01;
+      var x = gx + rt.dx, y = gy, prev = { x: x, y: y };
+      var ang0 = Math.PI / 2 + rt.dir;                     // mostly straight down, slight lean
       for (var i = 1; i <= ROOT_SEGS; i++) {
         var prog = i / ROOT_SEGS;
-        var ang = ang0 + Math.sin(prog * 4 + ph + t * 0.6) * 0.3 * (1 - 0.3 * prog);
-        ang += (Math.PI / 2 - ang) * 0.12 * prog;          // dip downward along the length
+        var ang = ang0 + Math.sin(prog * 3.5 + rt.ph + t * rt.spd) * rt.amp * (1 - 0.2 * prog)
+                       + rt.coil * Math.sin(prog * 2 + rt.ph);
+        ang += (Math.PI / 2 - ang) * 0.06;                 // gentle pull back toward down
         x += Math.cos(ang) * step; y += Math.sin(ang) * step;
-        var wd = thick * Math.pow(1 - prog, 0.7) + 0.4;
-        var style = 'hsla(' + rhue + ', ' + rsat + '%, ' + rl + '%, ' + (0.6 * (1 - 0.45 * prog)).toFixed(3) + ')';
+        var wd = baseThick * rt.thick * Math.pow(1 - prog, 0.7) + 0.4;
+        var style = 'hsla(' + rhue + ', ' + rsat + '%, ' + rl + '%, ' + (0.62 * (1 - 0.4 * prog)).toFixed(3) + ')';
         drawRootSeg(ctx, prev, { x: x, y: y }, style, wd, ax, ay, w, h, margin);
         prev = { x: x, y: y };
       }
     }
 
     function drawRoots(ctx, w, h, t, ax, ay) {
-      var gy = h * 0.83, margin = minDim * 0.01;
+      var gy = h * 0.8, margin = minDim * 0.01;
       for (var i = 0; i < trees.length; i++) {
         var tr = trees[i], gx = tr.x;
         if (rootCleared(gx, gy, ax, ay, w, h, margin)) continue; // no tree here -> no roots
         var c = color.getCellColor(gx, gy, w, h);
         var rhue = c.h + (30 - c.h) * 0.72, rsat = Math.min(52, c.s * 1.15), rl = Math.min(40, c.l * 0.85);
-        var thick = 1.0 + 1.6 * tr.z;
-        growTreeRoot(ctx, gx, gy, -1, i, t, ax, ay, w, h, thick, rhue, rsat, rl);
-        growTreeRoot(ctx, gx, gy, 1, i + 5, t, ax, ay, w, h, thick, rhue, rsat, rl);
+        var baseThick = 1.0 + 1.6 * tr.z;
+        for (var k = 0; k < tr.roots.length; k++) growTreeRoot(ctx, gx, gy, tr.roots[k], i * 7 + k, t, ax, ay, w, h, baseThick, rhue, rsat, rl);
       }
     }
 
